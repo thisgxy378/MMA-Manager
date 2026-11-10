@@ -15,7 +15,7 @@ A work-in-progress MMA promotion management game.
 
 ## Game saves vs GitHub
 
-The management prototype stores career state in browser `localStorage`. GitHub tracks **source-code changes**, not automatic career-game saves. Browser data may not transfer between devices or between local files and GitHub Pages. Back up your browser data before changing deployment URLs or clearing browser storage. Export/import saves and cloud syncing are future development goals.
+The management prototype automatically stores career state in browser `localStorage` and offers **Export career** / **Import career** buttons to back up or transfer saves as JSON files. GitHub tracks **source-code changes**, not automatic career-game saves. Browser data may not transfer between devices or between local files and GitHub Pages. Export your save before changing deployment URLs or clearing browser storage. Cloud syncing is a future development goal.
 
 ## Development roadmap
 
