@@ -1,0 +1,432 @@
+<!doctype html><html><head><meta charset="utf-8"><title>MMA GM v2.6 — Cage Awareness & Escapes</title><style>*{box-sizing:border-box}body{margin:0;background:#0a1019;color:#eef3fa;font:14px Segoe UI,Arial,sans-serif}header{padding:18px 28px;background:#121d2a;border-bottom:1px solid #2c3d50;display:flex;justify-content:space-between;align-items:center}h1{margin:0;font-size:21px}main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px;padding:16px;max-width:1550px;margin:auto}.panel{border:1px solid #2c3d50;background:#142031;border-radius:12px;overflow:hidden}#view{height:72vh;min-height:510px;position:relative}#view canvas{display:block}#status{position:absolute;left:15px;top:15px;background:#0a1420e8;padding:10px 14px;border-radius:8px;pointer-events:none}aside{padding:20px}h2{font-size:17px;margin:0 0 14px}button{background:#263c55;border:1px solid #48627d;color:white;padding:12px 14px;border-radius:7px;cursor:pointer;font-weight:600}button:hover{background:#365674}button.primary{background:#1b70b8}button:disabled{opacity:.45}section{margin-bottom:20px}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}.buttons button:first-child{grid-column:span 2}label{display:block;margin:13px 0 7px;color:#b7c9da}input[type=range]{width:100%}select{width:100%;padding:10px;background:#24374d;color:white;border:1px solid #52677d;border-radius:7px}.muted{color:#a2b4c6;line-height:1.55}#error{color:#ffb4b4;white-space:pre-wrap;margin-top:10px}footer{padding:14px;color:#9cb1c7}@media(max-width:850px){main{grid-template-columns:1fr}#view{height:60vh;min-height:420px}}</style></head><body><header><h1>MMA GM <span style="color:#6db5ed">/ Cage Awareness v2.6</span></h1><span>3D procedural rig · PC prototype</span></header><main><div class="panel"><div id="view"><div id="status">Loading 3D scene…</div></div></div><aside class="panel"><section><h2>Autonomous sparring · Fight IQ v2.6</h2><div class="buttons"><button class="primary" id="aiStart">▶ Start AI vs AI</button><button id="aiPause">Pause</button><button id="aiStop">Stop & reset</button></div><p class="muted">Round 1-informed: observation periods, measured entries, feints, circling, guarded exits and variable recovery. New: fence escapes, pressure and distance readouts. The octagon now has solid movement boundaries. Highlights are examples, not a complete tactical dataset.</p><p id="cageStatus" class="muted">Solid octagon boundary enabled · Fighters cannot move through the fence</p><p id="cageReadout" class="muted">Cage awareness: monitoring both fighters</p><label><input id="cageAI" type="checkbox" checked> Enable cage-aware escapes and pressure</label><p id="aiState" class="muted">Paused · Both fighters make their own decisions when started</p><p id="redMind" class="muted">Red: waiting</p><p id="blueMind" class="muted">Blue: waiting</p></section><section><h2>Knockdown / knockout testing</h2><div class="buttons"><button id="redKD">Knock down Red</button><button id="blueKD">Knock down Blue</button><button id="redKO">KO Red</button><button id="blueKO">KO Blue</button></div><p id="finishState" class="muted">No knockdowns · Fighters standing</p><label><input id="autoKO" type="checkbox" checked> Enable knockdowns and knockouts during AI sparring</label></section><section><h2>Manual animation testing</h2><p class="muted">Observe red’s compact high guard and blue’s slightly longer probing lead guard. Both retain bent arms at rest.</p><div class="buttons"><button class="primary" id="jab">▶ Lead Jab</button><button id="kick">▶ Rear Roundhouse</button><button id="combo">▶ Jab → Kick</button><button id="boxing">▶ Jab → Cross → Lead Hook</button><button id="hook">▶ Lead Hook Only</button><button id="reset">Reset Stance</button></div></section><section><label for="speed">Animation speed: <strong id="speedText">1.0×</strong></label><input id="speed" type="range" min="0.2" max="1.6" step="0.1" value="1"><label for="camera">Camera</label><select id="camera"><option value="three">Three-quarter ringside</option><option value="front">Front view</option><option value="side">Side view</option><option value="high">High angle</option></select><label><input id="loop" type="checkbox" checked> Repeat selected technique</label></section><section><h2>Real strike contact</h2><p class="muted">The jab → cross → lead hook sequence uses three separate fixed-length arm motions and independent collision checks. The red-corner fighter faces the blue-corner fighter. Gold rings show collision zones. Contact is checked using the moving glove or the full shin segment in 3D space; a strike only counts when its collision volume overlaps the opponent.</p><h2>Reference-based individual fighting stances</h2><p class="muted"><b>New:</b> Red uses a compact high guard with both hands close to the cheeks. Blue uses a slightly longer probing lead hand while keeping the rear hand close to the chin. Both have staggered feet, softened knees and angled torsos. In neutral stance, elbows stay close to the ribs and gloves sit in front of the cheeks. Arms extend only during strikes, then blend back into a compact guard without changing bone lengths.</p><h2>Articulated joints</h2><p class="muted"><b>New:</b> Visible shoulder, elbow, wrist, hip, knee, ankle and neck joints follow the animated skeleton. The head tilts independently and knockdowns flex the limbs as the fighter falls.</p><h2>Movement mechanics</h2><p class="muted"><b>Fixed limb lengths:</b> Upper arms, forearms, thighs and shins retain their original lengths throughout every animation. Strikes must use joint rotation and positioning rather than stretching.</p><p class="muted"><b>Jab:</b> lead shoulder extends, elbow straightens, rear hand protects the chin, then the fist snaps back.</p><p class="muted"><b>Lead hook:</b> the elbow stays bent and raised while the glove sweeps horizontally across the opponent, driven by torso rotation rather than an extended arm.</p><p class="muted"><b>Kick:</b> rear knee chambers, support foot pivots, hips turn and the shin swings across before recovery.</p><p class="muted">Both fighters face each other. The opponent has highlighted head and body impact targets. Autonomous mode lets both fighters independently attack, defend, manage range and react to misses. Manual buttons remain available for animation tests.</p></section><section><h2>AI distance management</h2><p id="range" class="muted">Measuring range…</p><p id="decision" class="muted">AI waiting for a technique</p><label><input id="autoClose" type="checkbox" checked> Close distance after a missed strike</label><label><input id="autoRetry" type="checkbox" checked> Retry after approaching</label></section><section><h2>Blue corner AI</h2><label><input id="blueCounter" type="checkbox" checked> Blue fighter counters with a jab</label><p id="blueDecision" class="muted">Blue corner waiting for an opening</p></section><section><h2>Contact monitor</h2><p id="contact" class="muted">No contact yet</p><p id="counter" class="muted">Jabs: 0 · Crosses: 0 · Hooks: 0 · Kicks: 0 · Misses: 0</p><label><input id="showHit" type="checkbox" checked> Show collision zones</label></section><div id="error"></div></aside></main><footer>Requires an internet connection to load Three.js. Rotate view with mouse drag; zoom with scroll.</footer><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"}}</script><script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const $=id=>document.getElementById(id), container=$('view'), status=$('status');
+let renderer,scene,camera,controls;
+try { renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(container.clientWidth,container.clientHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.prepend(renderer.domElement);
+scene=new THREE.Scene();scene.background=new THREE.Color('#111c29');scene.fog=new THREE.Fog('#111c29',17,38);
+camera=new THREE.PerspectiveCamera(46,container.clientWidth/container.clientHeight,.1,90);
+const positions={three:[4.8,3.5,7.1],front:[0,2.5,8],side:[8,2.7,0],high:[3,9,5]};
+function setCamera(v){camera.position.set(...positions[v]);camera.lookAt(0,1.1,0);controls.target.set(0,1.1,0);controls.update()}
+controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.maxPolarAngle=Math.PI*.48;setCamera('three');
+scene.add(new THREE.HemisphereLight(0xcfe7ff,0x263748,2.2));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(4,10,5);light.castShadow=true;light.shadow.mapSize.set(2048,2048);scene.add(light);
+const mat=(color,roughness=.75)=>new THREE.MeshStandardMaterial({color,roughness});const canvas=mat('#596878'),white=mat('#cbd3dc'),dark=mat('#24303e'),red=mat('#d54752'),blue=mat('#287bc0'),skin=mat('#cf9d7d'),skin2=mat('#9e725d'),black=mat('#151b22');
+const floor=new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.2,.17,8,1),canvas);floor.rotation.y=Math.PI/8;floor.position.y=-.14;floor.receiveShadow=true;scene.add(floor);
+const ring=new THREE.Mesh(new THREE.RingGeometry(3.4,3.47,8),white);ring.rotation.x=-Math.PI/2;ring.position.y=-.048;ring.rotation.z=Math.PI/8;scene.add(ring);
+const cageMat=new THREE.MeshBasicMaterial({color:'#8495a4',transparent:true,opacity:.25,side:THREE.DoubleSide,depthWrite:false});for(let i=0;i<8;i++){const a=i*Math.PI/4+Math.PI/8,b=(i+1)*Math.PI/4+Math.PI/8;let p1=new THREE.Vector3(Math.cos(a)*5.1,0,Math.sin(a)*5.1),p2=new THREE.Vector3(Math.cos(b)*5.1,0,Math.sin(b)*5.1);const pole=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,2.5,8),dark);pole.position.set(p1.x,1.25,p1.z);scene.add(pole);const mesh=new THREE.Mesh(new THREE.PlaneGeometry(p1.distanceTo(p2),2.35),cageMat);mesh.position.copy(p1).add(p2).multiplyScalar(.5);mesh.position.y=1.22;mesh.rotation.y=-Math.atan2(p2.z-p1.z,p2.x-p1.x);scene.add(mesh)}
+function ball(parent,r,material){let o=new THREE.Mesh(new THREE.SphereGeometry(r,16,12),material);o.castShadow=true;parent.add(o);return o}
+function segment(parent,a,b,r1,r2,material){let d=new THREE.Vector3().subVectors(b,a),o=new THREE.Mesh(new THREE.CylinderGeometry(r2,r1,d.length(),10),material);o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());o.castShadow=true;parent.add(o);return o}
+function fighter(col,sk){const root=new THREE.Group();scene.add(root);const parts=new THREE.Group();root.add(parts);const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.51,6,12),sk);body.position.set(0,1.39,0);body.castShadow=true;parts.add(body);const shorts=new THREE.Mesh(new THREE.CylinderGeometry(.29,.32,.38,12),col);shorts.position.y=.94;parts.add(shorts);const head=ball(parts,.19,sk);head.position.set(0,1.99,0);const hair=new THREE.Mesh(new THREE.SphereGeometry(.192,16,12,0,Math.PI*2,0,Math.PI*.47),black);hair.position.copy(head.position);parts.add(hair);const neck=ball(parts,.105,sk);neck.position.set(0,1.83,0);
+const pelvis=ball(parts,.23,sk);pelvis.position.set(0,1.02,0);
+const joints={shoulder:[],elbow:[],wrist:[],hip:[],knee:[],ankle:[]};
+for(const key of Object.keys(joints))for(let i=0;i<2;i++)joints[key].push(ball(parts,({shoulder:.14,elbow:.108,wrist:.083,hip:.16,knee:.13,ankle:.10})[key],sk));
+const gloves=[ball(parts,.12,col),ball(parts,.12,col)];const arms=[[],[]],legs=[[],[]];for(let i=0;i<2;i++){for(let j=0;j<2;j++){const o=new THREE.Group();parts.add(o);(j?legs:arms)[i]=[o,ball(parts,j?.105:.085,sk)]}}return{root,parts,gloves,arms,legs,body,head,neck,pelvis,joints,sk,col,shinPoint:new THREE.Vector3(),shinStart:new THREE.Vector3(),shinEnd:new THREE.Vector3(),jabPoint:new THREE.Vector3(),crossPoint:new THREE.Vector3()}}
+const a=fighter(red,skin),b=fighter(blue,skin2);
+// Individual stance profiles based on the supplied MMA reference footage.
+// These affect targets and posture, never bone lengths.
+const stanceProfiles=new WeakMap([
+ [a,{name:'Compact high guard',handZ:.16,handY:1.85,handX:.17,elbowX:.19,elbowY:1.46,elbowZ:.08,leadReach:0,stanceWidth:1.06,stanceDepth:1.10,torsoAngle:.21,kneeDrop:.035}],
+ [b,{name:'Probing lead guard',handZ:.22,handY:1.82,handX:.19,elbowX:.23,elbowY:1.49,elbowZ:.12,leadReach:.18,stanceWidth:1.15,stanceDepth:1.17,torsoAngle:.29,kneeDrop:.055}]
+]);
+
+// Clear target reference points attached to the defender's body.
+const targetMat=new THREE.MeshBasicMaterial({color:0xffd35a,transparent:true,opacity:.82,depthTest:false});
+function targetRing(parent,r,x,y,z){const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.013,8,48),targetMat);ring.position.set(x,y,z);parent.add(ring);return ring}
+const redHeadTarget=targetRing(a.parts,.22,0,1.97,.23);const headTarget=targetRing(b.parts,.22,0,1.97,.23);
+const bodyTarget=targetRing(b.parts,.29,0,1.39,.30);
+const targetDot=new THREE.Mesh(new THREE.SphereGeometry(.045,12,8),new THREE.MeshBasicMaterial({color:0xffdf72,depthTest:false}));targetDot.position.set(0,1.97,.23);b.parts.add(targetDot);
+a.root.position.set(-.78,0,0);b.root.position.set(.78,0,0);a.root.rotation.y=Math.PI/2;b.root.rotation.y=-Math.PI/2;
+// Keep anatomical bone lengths constant regardless of strike pose.
+function fixedBone(start,desired,length){const delta=desired.clone().sub(start);if(delta.lengthSq()<1e-8)delta.set(0,-1,0);return start.clone().add(delta.normalize().multiplyScalar(length))}
+// Two-bone inverse kinematics: keeps both bone lengths exact, constrains the
+// hinge angle, and uses a stable pole vector to determine elbow/knee direction.
+// Coordinates are relative to the fighter's local anatomical frame.
+function solveTwoBone(start,desired,upperLength,lowerLength,pole,minBend,maxBend){
+ const axis=desired.clone().sub(start);
+ const rawDistance=axis.length();
+ if(rawDistance<1e-6)axis.set(0,0,1);else axis.divideScalar(rawDistance);
+ // Bend angle measured from a fully straight limb (0 = straight).
+ const minD=Math.sqrt(Math.max(0,upperLength*upperLength+lowerLength*lowerLength+2*upperLength*lowerLength*Math.cos(Math.PI-maxBend)));
+ const maxD=Math.sqrt(Math.max(0,upperLength*upperLength+lowerLength*lowerLength+2*upperLength*lowerLength*Math.cos(Math.PI-minBend)));
+ const distance=THREE.MathUtils.clamp(rawDistance,Math.max(Math.abs(upperLength-lowerLength)+.001,minD),Math.min(upperLength+lowerLength-.001,maxD));
+ const end=start.clone().addScaledVector(axis,distance);
+ const projection=(upperLength*upperLength+distance*distance-lowerLength*lowerLength)/(2*distance);
+ const rise=Math.sqrt(Math.max(0,upperLength*upperLength-projection*projection));
+ const sideways=pole.clone().sub(axis.clone().multiplyScalar(pole.dot(axis)));
+ if(sideways.lengthSq()<.00001)sideways.set(1,0,0).addScaledVector(axis,-axis.x);
+ sideways.normalize();
+ const mid=start.clone().addScaledVector(axis,projection).addScaledVector(sideways,rise);
+ return {mid,end};
+}
+// Rig uses a local frame: +Z forward, -X lead (left) side.
+// Time-based smoothing: every fighter owns an independent set of animation channels.
+// This blends attack, defence and recovery poses rather than snapping at state changes.
+const poseChannels=new WeakMap();let animationDelta=1/60;
+function blendedPose(f,target){
+ let state=poseChannels.get(f);if(!state){state={};poseChannels.set(f,state)}
+ const output={};
+ for(const key of ['jab','cross','hook','hookPhase','kick','yaw','lean','bob','twist','head']){
+   const desired=target[key]||0;
+   const current=state[key]===undefined?desired:state[key];
+   // Faster extension than recovery; body/guard transitions are softer.
+   const rate=(key==='jab'||key==='cross'||key==='hook'||key==='kick')?(desired>current?48:29):key==='bob'?9:22;
+   const alpha=1-Math.exp(-rate*Math.min(.06,animationDelta));
+   state[key]=current+(desired-current)*alpha;output[key]=state[key];
+ }
+ return output;
+}
+function pose(f,p){const t=blendedPose(f,p||{});f.parts.rotation.y=(t.yaw||0)+stanceProfiles.get(f).torsoAngle;f.parts.rotation.z=t.lean||0;f.parts.position.y=t.bob||0;const fall=typeof falls!=='undefined'?falls.get(f):null;
+const falling=fall&&fall.mode!=='standing';const flex=falling?Math.min(1,fall.angle/1.48):0;
+f.neck.position.set(0,1.80-flex*.08,.075+flex*.04);
+f.head.position.set(0,1.96-flex*.13,.09+flex*.09);
+f.pelvis.position.set(0,1.02,0);
+const profile=stanceProfiles.get(f);const isA=f===a;const jab=t.jab||0,kick=t.kick||0,cross=t.cross||0,hook=t.hook||0,hookPhase=t.hookPhase||0;for(let i=0;i<2;i++){
+const lead=i===0,sign=lead?-1:1;const sh=new THREE.Vector3(sign*.32,1.72,.02);let elbow=new THREE.Vector3(sign*profile.elbowX,profile.elbowY,profile.elbowZ),hand=new THREE.Vector3(sign*profile.handX,profile.handY,profile.handZ+(lead?profile.leadReach:0));
+if(lead){elbow.lerp(new THREE.Vector3(sign*.31,1.62,.45),jab);hand.lerp(new THREE.Vector3(sign*.18,1.80,.84),jab);
+ // Hook: elbow stays high and flexed while the shoulder drives a lateral arc.
+ // Phase 0-0.3 loads outside the guard, 0.3-0.75 sweeps across, then recovers.
+ const sweep=smooth((hookPhase-.22)/.55);
+ const hookElbow=new THREE.Vector3(-.44+.19*sweep,1.69,.22+.25*sweep);
+ const hookHand=new THREE.Vector3(-.45+.68*sweep,1.79,.43+.10*sweep);
+ elbow.lerp(hookElbow,hook);hand.lerp(hookHand,hook);
+ }else{hand.z-=jab*.08;hand.y+=jab*.08;
+ elbow.lerp(new THREE.Vector3(.30,1.61,.45),cross);hand.lerp(new THREE.Vector3(.14,1.80,.84),cross)}
+const shoulderRest=new THREE.Vector3(sign*.32,1.72,.02),elbowRest=new THREE.Vector3(sign*.29,1.43,.12),handRest=new THREE.Vector3(sign*.19,1.85,.24);
+const armIK=solveTwoBone(sh,hand,0.40,0.44,
+ new THREE.Vector3(sign*.25,-1,-.28),.06,2.90);
+ elbow.copy(armIK.mid);hand.copy(armIK.end);
+if(flex){const bendElbow=sh.clone().add(new THREE.Vector3(sign*.23,-.27,.18));hand.lerp(sh.clone().add(new THREE.Vector3(sign*.22,-.40,.16)),flex*.72);
+ const folded=solveTwoBone(sh,hand,0.40,0.44,new THREE.Vector3(sign*.25,-1,-.28),.06,2.90);
+ elbow.copy(folded.mid);hand.copy(folded.end)}
+f.joints.shoulder[i].position.copy(sh);f.joints.elbow[i].position.copy(elbow);f.joints.wrist[i].position.copy(hand);
+let [upper,lower]=f.arms[i];upper.clear();lower.position.copy(elbow);lower.children.length&&lower.clear();segment(upper,sh,elbow,.115,.095,f.sk);segment(upper,elbow,hand,.09,.072,f.sk);f.gloves[i].position.copy(hand);if(lead)f.jabPoint.copy(hand);else f.crossPoint.copy(hand);
+const hip=new THREE.Vector3(sign*.18,.94,0),knee=new THREE.Vector3(sign*.24,.48-profile.kneeDrop,lead?.26:-.26),foot=new THREE.Vector3(sign*.28*profile.stanceWidth,.13,lead?.49*profile.stanceDepth:-.45*profile.stanceDepth);
+if(!lead){knee.lerp(new THREE.Vector3(sign*.08,.93,.59),Math.min(1,kick*1.4));foot.lerp(new THREE.Vector3(-.05,1.38,1.76),kick);}
+if(lead){foot.x+=kick*.13;foot.z-=kick*.10}
+const restHip=new THREE.Vector3(sign*.18,.94,0),restKnee=new THREE.Vector3(sign*.24,.48,lead?.26:-.26),restFoot=new THREE.Vector3(sign*.28,.13,lead?.49:-.45);
+const legIK=solveTwoBone(hip,foot,restHip.distanceTo(restKnee),restKnee.distanceTo(restFoot),
+ new THREE.Vector3(sign*.08,0,.95),.06,2.45);
+ knee.copy(legIK.mid);foot.copy(legIK.end);
+if(flex){const bent=hip.clone().add(new THREE.Vector3(sign*.16,-.21,.30));foot.lerp(hip.clone().add(new THREE.Vector3(sign*.20,-.42,.30)),flex*.78);
+ const folded=solveTwoBone(hip,foot,restHip.distanceTo(restKnee),restKnee.distanceTo(restFoot),new THREE.Vector3(sign*.08,0,.95),.06,2.45);
+ knee.copy(folded.mid);foot.copy(folded.end)}
+f.joints.hip[i].position.copy(hip);f.joints.knee[i].position.copy(knee);f.joints.ankle[i].position.copy(foot);
+const [leg,ankle]=f.legs[i];leg.clear();segment(leg,hip,knee,.16,.12,f.sk);segment(leg,knee,foot,.12,.08,f.sk);if(!lead){f.shinPoint.copy(knee).lerp(foot,.55);f.shinStart.copy(knee);f.shinEnd.copy(foot)}ankle.position.copy(foot);ankle.clear();const shoe=new THREE.Mesh(new THREE.BoxGeometry(.17,.13,.31),black);shoe.position.z=.10;ankle.add(shoe);
+}
+f.body.rotation.y=(t.twist||0)+profile.torsoAngle*.48;f.body.rotation.x=-.055;f.head.rotation.x=-.16;f.head.rotation.y=(t.head||0);f.head.rotation.z=(t.head||0)*.35+flex*.22;
+}
+// Collision volumes are evaluated in world space after every pose update.
+const hitZones={
+ head:{center:new THREE.Vector3(0,1.97,.10),radius:.28},
+ body:{center:new THREE.Vector3(0,1.38,.08),radius:.39}
+};
+const hitMarker=new THREE.Mesh(new THREE.SphereGeometry(.115,18,12),
+ new THREE.MeshBasicMaterial({color:0xffd05d,transparent:true,opacity:0,depthTest:false}));
+scene.add(hitMarker);
+const contactStats={jab:0,cross:0,hook:0,kick:0,miss:0};
+let jabChecked=false,crossChecked=false,hookChecked=false,kickChecked=false,impactFlash=0,defenderReact=0;let bluePhase="waiting",blueTime=0,blueJabChecked=false,blueJabs=0,blueMisses=0,redReact=0,blueReady=false;let missedTypes=[],approachType=null,approachCooldown=0,attempts=0;
+const tmpStrike=new THREE.Vector3(),tmpTarget=new THREE.Vector3(),tmpShinA=new THREE.Vector3(),tmpShinB=new THREE.Vector3(),tmpDelta=new THREE.Vector3();
+function worldPoint(f,p,out){return f.parts.localToWorld(out.copy(p))}
+function detectStrike(type,amount){
+ const checked=type==='jab'?jabChecked:type==='cross'?crossChecked:type==='hook'?hookChecked:kickChecked;
+ if(checked||amount<.58)return;
+ const point=type==='cross'?a.crossPoint:type==='hook'||type==='jab'?a.jabPoint:a.shinPoint;
+ const target=type==='kick'?hitZones.body:hitZones.head;
+ worldPoint(b,target.center,tmpTarget);
+ if(type==='kick'){
+   worldPoint(a,a.shinStart,tmpShinA);
+   worldPoint(a,a.shinEnd,tmpShinB);
+   tmpDelta.copy(tmpShinB).sub(tmpShinA);
+   const t=THREE.MathUtils.clamp(tmpTarget.clone().sub(tmpShinA).dot(tmpDelta)/Math.max(.0001,tmpDelta.lengthSq()),0,1);
+   tmpStrike.copy(tmpShinA).addScaledVector(tmpDelta,t);
+ }else worldPoint(a,point,tmpStrike);
+ const strikeRadius=type==='kick'?.18:.14;
+ const distance=tmpStrike.distanceTo(tmpTarget);
+ // Evaluate near peak extension. Misses are reported if no overlap by the end of the attack.
+ if(distance<=target.radius+strikeRadius){
+   if(type==='jab')jabChecked=true;else if(type==='cross')crossChecked=true;else if(type==='hook')hookChecked=true;else kickChecked=true;
+   contactStats[type]++;impactFlash=.30;defenderReact=.32;
+   hitMarker.position.copy(tmpStrike).lerp(tmpTarget,.5);
+   $('contact').textContent=type.toUpperCase()+' CONTACT · '+distance.toFixed(2)+' m separation';
+   status.textContent=type.toUpperCase()+' CONNECTS';
+   updateCounter();
+ }
+}
+function updateCounter(){$('counter').textContent='Jabs: '+contactStats.jab+' · Crosses: '+contactStats.cross+' · Hooks: '+contactStats.hook+' · Kicks: '+contactStats.kick+' · Misses: '+contactStats.miss+' · Blue jabs: '+blueJabs+' · Blue misses: '+blueMisses}
+function endAttempt(type,amount){
+ const prop=type+'Checked';
+ if(amount<.1&&!window['previous_'+type])return;
+ if(amount<.1&&window['previous_'+type]&&!({jab:jabChecked,cross:crossChecked,hook:hookChecked,kick:kickChecked})[type]){
+   contactStats.miss++;$('contact').textContent=type.toUpperCase()+' MISSED · no collision';updateCounter();missedTypes.push(type);
+   if(type==='jab')jabChecked=true;else if(type==='cross')crossChecked=true;else if(type==='hook')hookChecked=true;else kickChecked=true;
+ }
+ window['previous_'+type]=amount>.1;
+}
+function resetBlue(){bluePhase='waiting';blueTime=0;blueJabChecked=false;blueReady=false;$('blueDecision').textContent='Blue corner waiting for an opening'}
+function updateBlue(step,redActive){
+ if(!$('blueCounter').checked){pose(b,{bob:Math.sin(performance.now()*.0024)*.012});return;}
+ // Wait for the red fighter to complete its attack, then respond independently.
+ if(bluePhase==='waiting'&&redActive)blueReady=true;
+ if(bluePhase==='waiting'&&blueReady&&!redActive){bluePhase='delay';blueTime=0;blueReady=false;$('blueDecision').textContent='Red attack finished — blue preparing counter-jab';}
+ if(bluePhase==='delay'){blueTime+=step;if(blueTime>=.22){bluePhase='jabbing';blueTime=0;blueJabChecked=false;$('blueDecision').textContent='Blue corner throws a counter-jab';}}
+ let bj=0;
+ if(bluePhase==='jabbing'){
+  blueTime+=step;bj=pulse(blueTime,0,.12,.25,.47);
+  pose(b,{jab:bj,yaw:-bj*.13,lean:-bj*.05});
+  if(bj>.58&&!blueJabChecked){
+   b.root.updateMatrixWorld(true);a.root.updateMatrixWorld(true);
+   const glove=worldPoint(b,b.jabPoint,new THREE.Vector3());
+   const head=worldPoint(a,hitZones.head.center,new THREE.Vector3());
+   const distance=glove.distanceTo(head);
+   if(distance<=hitZones.head.radius+.14){blueJabChecked=true;blueJabs++;redReact=.30;impactFlash=.30;hitMarker.position.copy(glove).lerp(head,.5);$('contact').textContent='BLUE JAB CONTACT · '+distance.toFixed(2)+' m';$('blueDecision').textContent='Blue jab connects';updateCounter();}
+  }
+  if(blueTime>=.65){if(!blueJabChecked){blueMisses++;$('blueDecision').textContent='Blue jab missed — out of range';updateCounter();}bluePhase='recover';blueTime=0;}
+ }else if(bluePhase==='recover'){blueTime+=step;if(blueTime>.4){bluePhase='waiting';blueTime=0;}}
+ pose(b,{jab:bj,yaw:-bj*.13,lean:-bj*.05,bob:Math.sin(performance.now()*.0024)*.012});
+}
+function resetChecks(){jabChecked=false;crossChecked=false;hookChecked=false;kickChecked=false;window.previous_jab=false;window.previous_cross=false;window.previous_hook=false;window.previous_kick=false}
+$('showHit').onchange=()=>{redHeadTarget.visible=headTarget.visible=bodyTarget.visible=targetDot.visible=$('showHit').checked};
+// Each fighter has a ground-level pivot. Falling rotates the entire fixed-length rig,
+// never individual limbs or bone lengths. Knockdowns recover; KOs end the bout.
+const falls=new Map([[a,{mode:'standing',time:0,angle:0,damage:0,knockdowns:0}], [b,{mode:'standing',time:0,angle:0,damage:0,knockdowns:0}]]);
+let fightOver=false;
+function beginFall(f,ko=false){
+ const st=falls.get(f);if(fightOver||st.mode!=='standing')return;
+ st.mode=ko?'koFall':'kdFall';st.time=0;st.angle=0;st.knockdowns++;
+ const who=f===a?'RED':'BLUE';
+ $('finishState').textContent=who+(ko?' knocked out!':' knocked down — attempting to recover');
+ status.textContent=who+(ko?' — KNOCKOUT!':' — KNOCKDOWN!');
+ if(ko){fightOver=true;aiPaused=true;$('aiState').textContent='Fight stopped · '+(f===a?'Blue':'Red')+' wins by KO';}
+}
+function updateFalls(dt){
+ for(const [f,st] of falls){
+  if(st.mode==='standing')continue;
+  st.time+=dt;
+  const falling=st.mode==='koFall'||st.mode==='kdFall';
+  if(falling){
+   const progress=smooth(st.time/.65);
+   st.angle=progress*1.48;
+   if(st.time>=.65){st.mode=st.mode==='koFall'?'koDown':'kdDown';st.time=0;}
+  }else if(st.mode==='kdDown'){
+   st.angle=1.48;
+   if(st.time>2.2){st.mode='gettingUp';st.time=0;$('finishState').textContent=(f===a?'Red':'Blue')+' getting back to their feet';}
+  }else if(st.mode==='gettingUp'){
+   st.angle=1.48*(1-smooth(st.time/1.25));
+   if(st.time>=1.25){st.mode='standing';st.angle=0;st.time=0;st.damage=Math.max(0,st.damage-1);$('finishState').textContent=(f===a?'Red':'Blue')+' recovered from knockdown';}
+  }else st.angle=1.48;
+  // Tip sideways onto the canvas; body and limbs rotate as one unit.
+  f.parts.rotation.z=st.angle*(f===a?1:-1);
+  f.parts.position.y=-.18*Math.sin(st.angle);
+ }
+}
+function resetFalls(){fightOver=false;for(const [f,st] of falls){Object.assign(st,{mode:'standing',time:0,angle:0,damage:0,knockdowns:0});f.parts.rotation.z=0;f.parts.position.y=0;}$('finishState').textContent='No knockdowns · Fighters standing';}
+for(const [id,f,ko] of [['redKD',a,false],['blueKD',b,false],['redKO',a,true],['blueKO',b,true]])$(id).onclick=()=>{aiReset();beginFall(f,ko)};
+let autonomous=false,aiPaused=false,aiClock=0;
+const brains=[{fighter:a,name:'Red',state:'observe',time:.5,cooldown:0,attack:'jab',hit:false,seen:false,misses:0,contacts:0,defend:0,stun:0,feints:0,pressure:0},{fighter:b,name:'Blue',state:'observe',time:.9,cooldown:0,attack:'jab',hit:false,seen:false,misses:0,contacts:0,defend:0,stun:0,feints:0,pressure:0}];
+const moveSpeed=.60,minimumSeparation=.84;
+// The visual cage is a regular octagon with apothem ~4.71 m.
+// Keep the centre of each fighter's torso at least 0.43 m inside every fence panel.
+const cageRadius=5.1, cageApothem=cageRadius*Math.cos(Math.PI/8), fighterRadius=.43;
+const cageNormals=Array.from({length:8},(_,i)=>{const t=(i+.5)*Math.PI/4+Math.PI/8;return new THREE.Vector2(Math.cos(t),Math.sin(t))});
+// Fence proximity and a valid tangent along the nearest panel.
+function cageInfo(f){
+ const p=f.root.position,limit=cageApothem-fighterRadius;
+ let clearance=Infinity,normal=cageNormals[0];
+ for(const n of cageNormals){const d=limit-(p.x*n.x+p.z*n.y);if(d<clearance){clearance=d;normal=n;}}
+ return {clearance:Math.max(0,clearance),normal};
+}
+function cageEscape(brain,other,dt){
+ const info=cageInfo(brain.fighter),p=brain.fighter.root.position,q=other.fighter.root.position;
+ // Tangential movement takes the fighter around the wall instead of pushing through it.
+ const tangent=new THREE.Vector2(-info.normal.y,info.normal.x);
+ const toOther=new THREE.Vector2(q.x-p.x,q.z-p.z);
+ const side=toOther.dot(tangent)>0?-1:1;
+ const travel=moveSpeed*1.12*dt;
+ p.x+=tangent.x*side*travel-info.normal.x*travel*.22;
+ p.z+=tangent.y*side*travel-info.normal.y*travel*.22;
+ constrainToCage(brain.fighter);
+}
+function cagePressure(brain,other,dt){
+ // Pressure only when the opponent is close to the fence: close the exit without body overlap.
+ const info=cageInfo(other.fighter),p=brain.fighter.root.position,q=other.fighter.root.position;
+ const delta=new THREE.Vector2(q.x-p.x,q.z-p.z);const d=delta.length();
+ if(d>1.02&&d>0.001){delta.multiplyScalar(Math.min(moveSpeed*.48*dt,d-1.02)/d);p.x+=delta.x;p.z+=delta.y;}
+ constrainToCage(brain.fighter);
+}
+function constrainToCage(f){
+ const p=f.root.position,limit=cageApothem-fighterRadius;
+ // Project out of all violated half-spaces. Handles corners as well as flat panels.
+ for(let iteration=0;iteration<3;iteration++)for(const n of cageNormals){
+  const excess=p.x*n.x+p.z*n.y-limit;
+  if(excess>0){p.x-=n.x*excess;p.z-=n.y*excess;}
+ }
+}
+function separateFighters(){
+ const delta=new THREE.Vector2(b.root.position.x-a.root.position.x,b.root.position.z-a.root.position.z);
+ const d=delta.length();if(d>=minimumSeparation)return;
+ if(d<.0001)delta.set(1,0);else delta.multiplyScalar(1/d);
+ const correction=(minimumSeparation-d)*.5;
+ a.root.position.x-=delta.x*correction;a.root.position.z-=delta.y*correction;
+ b.root.position.x+=delta.x*correction;b.root.position.z+=delta.y*correction;
+ constrainToCage(a);constrainToCage(b);
+}
+function moveRelative(brain,other,distance){
+ const p=brain.fighter.root.position,q=other.fighter.root.position;
+ const v=new THREE.Vector2(q.x-p.x,q.z-p.z);
+ if(v.lengthSq()<.001)return;
+ v.normalize().multiplyScalar(distance);p.x+=v.x;p.z+=v.y;
+ constrainToCage(brain.fighter);
+}
+function circleRelative(brain,other,distance,clockwise){
+ const p=brain.fighter.root.position,q=other.fighter.root.position;
+ const v=new THREE.Vector2(q.x-p.x,q.z-p.z);if(v.lengthSq()<.001)return;
+ v.normalize();const direction=clockwise?1:-1;
+ p.x+=-v.y*distance*direction;p.z+=v.x*distance*direction;
+ constrainToCage(brain.fighter);
+}
+function faceOpponent(f,other){const dx=other.root.position.x-f.root.position.x,dz=other.root.position.z-f.root.position.z;f.root.rotation.y=Math.atan2(dx,dz);}
+function enforceArena(){constrainToCage(a);constrainToCage(b);separateFighters();faceOpponent(a,b);faceOpponent(b,a)}
+
+function aiText(brain,message){$(brain.name==='Red'?'redMind':'blueMind').textContent=brain.name+': '+message}
+function aiChoose(brain,opponent){
+ const d=brain.fighter.root.position.distanceTo(opponent.fighter.root.position);
+ const threatened=opponent.state==='strike'&&opponent.time<.37;
+ if(threatened&&Math.random()<.72){brain.state='defend';brain.time=.23+Math.random()*.25;brain.defend=.9;aiText(brain,'guarding / slipping incoming strike');return}
+ if(falls.get(brain.fighter).mode!=='standing'){brain.state='observe';brain.time=.4;return}
+ if($('cageAI').checked){
+  const own=cageInfo(brain.fighter),opp=cageInfo(opponent.fighter);
+  if(own.clearance<.62&&d<2.35&&Math.random()<.88){brain.state='cageEscape';brain.time=.8+Math.random()*.5;aiText(brain,'near fence — pivoting out along cage');return;}
+  if(opp.clearance<.55&&own.clearance>.85&&d<2.2&&Math.random()<.65){brain.state='cagePressure';brain.time=.5+Math.random()*.55;aiText(brain,'opponent on fence — cutting off escape');return;}
+ }
+
+ // A decision can be to do nothing. This keeps real observation phases between exchanges.
+ if(Math.random()<.27){brain.state='observe';brain.time=.35+Math.random()*.8;aiText(brain,'reading opponent / holding position');return}
+ if(d>1.28){brain.state='advance';brain.time=.45+Math.random()*.65;aiText(brain,'measuring distance — entering range');return}
+ if(d<.90){brain.state='retreat';brain.time=.25+Math.random()*.4;aiText(brain,'resetting distance');return}
+ const roll=Math.random();
+ if(roll<.26){brain.state='circle';brain.time=.4+Math.random()*.65;aiText(brain,'circling for an angle');return}
+ if(roll<.45){brain.state='feint';brain.time=0;brain.feints++;aiText(brain,'showing lead hand / feinting');return}
+ if(roll<.56){brain.state='retreat';brain.time=.20+Math.random()*.25;aiText(brain,'exiting before re-entry');return}
+ brain.attack=brain.contacts>0&&Math.random()<.43?'cross':Math.random()<.75?'jab':'cross';
+ brain.state='strike';brain.time=0;brain.hit=false;brain.seen=false;
+ aiText(brain,'stepping into '+brain.attack);
+}
+function aiPose(brain,amount){const isCross=brain.attack==='cross';const guard=brain.state==='defend'?brain.defend:0;const reaction=Math.max(0,brain.stun||0);pose(brain.fighter,{jab:isCross?0:amount,cross:isCross?amount:0,yaw:(isCross?.15:-.12)*amount,lean:-.04*amount+guard*.06+reaction*.11,head:guard*.18+reaction*.12,bob:Math.sin(aiClock*5+(brain.name==='Red'?0:1.7))*.018});}
+function aiHit(brain,opponent,amount){
+ if(amount<.60||brain.hit)return;
+ const glove=worldPoint(brain.fighter,brain.attack==='cross'?brain.fighter.crossPoint:brain.fighter.jabPoint,new THREE.Vector3());
+ const target=worldPoint(opponent.fighter,hitZones.head.center,new THREE.Vector3());
+ const distance=glove.distanceTo(target);
+ if(distance<=hitZones.head.radius+.14){brain.hit=true;brain.contacts++;impactFlash=.27;hitMarker.position.copy(glove).lerp(target,.5);$('contact').textContent=brain.name.toUpperCase()+' '+brain.attack.toUpperCase()+' CONNECTS';aiText(brain,brain.attack+' landed ('+brain.contacts+' hits)');opponent.defend=.85;opponent.stun=.24;opponent.state='defend';opponent.time=.25;aiText(opponent,'absorbed '+brain.attack+' — recovering guard');
+  if($('autoKO').checked){const targetState=falls.get(opponent.fighter);targetState.damage++;
+    // Visible damage threshold makes finishes demonstrable without random instant KOs.
+    if(targetState.damage>=8)beginFall(opponent.fighter,true);
+    else if(targetState.damage===4)beginFall(opponent.fighter,false);
+  }
+ }
+}
+function aiStep(dt){
+ aiClock+=dt;
+ if(fightOver){updateFalls(dt);return;}
+ const distance=a.root.position.distanceTo(b.root.position);
+ $('range').textContent='Fighter separation: '+distance.toFixed(2)+' m · body gap: '+gap().toFixed(2)+' m';
+ for(let i=0;i<2;i++){
+  const brain=brains[i],other=brains[1-i];
+  if(falls.get(brain.fighter).mode!=='standing'){brain.state='observe';brain.time=.3;continue;}
+  brain.defend=Math.max(0,brain.defend-dt*1.3);brain.stun=Math.max(0,(brain.stun||0)-dt);
+  if(brain.state==='observe'){brain.time-=dt;if(brain.time<=0)aiChoose(brain,other)}
+  else if(brain.state==='advance'){
+   const d=brain.fighter.root.position.distanceTo(other.fighter.root.position);
+   const step=Math.min(moveSpeed*dt,Math.max(0,d-1.08));
+   moveRelative(brain,other,step);
+   brain.time-=dt;if(d<=1.10||brain.time<=0){brain.state='observe';brain.time=.12}
+  }else if(brain.state==='retreat'){
+   const d=brain.fighter.root.position.distanceTo(other.fighter.root.position);
+   const step=Math.min(moveSpeed*.55*dt,Math.max(0,1.18-d));
+   moveRelative(brain,other,-step);
+   brain.time-=dt;if(d>=1.16||brain.time<=0){brain.state='observe';brain.time=.22}
+  }else if(brain.state==='circle'){
+   const offset=(i===0?1:-1)*dt*.36*(brain.contacts%2===0?1:-1);
+   circleRelative(brain,other,Math.abs(offset),offset>0);
+   brain.time-=dt;if(brain.time<=0){brain.state='observe';brain.time=.16}
+  }else if(brain.state==='cageEscape'){
+   cageEscape(brain,other,dt);brain.time-=dt;
+   if(brain.time<=0||cageInfo(brain.fighter).clearance>.95){brain.state='observe';brain.time=.22;aiText(brain,'escaped fence — resetting in open space');}
+  }else if(brain.state==='cagePressure'){
+   cagePressure(brain,other,dt);brain.time-=dt;
+   if(brain.time<=0||cageInfo(other.fighter).clearance>.9){brain.state='observe';brain.time=.18;}
+  }else if(brain.state==='feint'){
+   brain.time+=dt;const f=pulse(brain.time,0,.09,.13,.24)*.26;aiPose(brain,f);
+   if(brain.time>.32){brain.state='observe';brain.time=.08}
+  }else if(brain.state==='defend'){
+   brain.time-=dt;if(brain.time<=0){brain.state='observe';brain.time=.18}
+  }else if(brain.state==='strike'){
+   brain.time+=dt;
+   const power=pulse(brain.time,0,.13,.24,.44);
+   aiPose(brain,power);
+   brain.fighter.root.updateMatrixWorld(true);other.fighter.root.updateMatrixWorld(true);
+   aiHit(brain,other,power);
+   if(brain.time>=.62){
+    if(!brain.hit){brain.misses++;const d=brain.fighter.root.position.distanceTo(other.fighter.root.position);if(d>1.18){brain.state='advance';brain.time=.42;aiText(brain,brain.attack+' missed — closing distance')}else{brain.state='observe';brain.time=.35+Math.random()*.55;aiText(brain,brain.attack+' missed — reassessing opening')}}
+    else{brain.state='observe';brain.time=.24+Math.random()*.4}
+   }
+  }
+  if(brain.state!=='strike'&&brain.state!=='feint')aiPose(brain,0);
+ }
+ enforceArena();
+ const redC=cageInfo(a).clearance,blueC=cageInfo(b).clearance;
+ $('cageReadout').textContent='Fence clearance · Red '+redC.toFixed(2)+' m'+(redC<.65?' (trapped)':'')+' · Blue '+blueC.toFixed(2)+' m'+(blueC<.65?' (trapped)':'');
+ updateFalls(dt);
+ hitMarker.material.opacity=Math.max(0,hitMarker.material.opacity-dt*3);
+ $('aiState').textContent='AI vs AI running · Red '+brains[0].contacts+' hits / '+brains[0].misses+' misses · Blue '+brains[1].contacts+' hits / '+brains[1].misses+' misses';
+ status.textContent='AI vs AI · LIVE SPARRING';
+}
+function aiReset(){resetFalls();autonomous=false;aiPaused=false;aiClock=0;a.root.position.set(-.78,0,0);b.root.position.set(.78,0,0);a.root.rotation.y=Math.PI/2;b.root.rotation.y=-Math.PI/2;for(let i=0;i<2;i++){Object.assign(brains[i],{state:'observe',time:i===0?.5:.9,hit:false,seen:false,misses:0,contacts:0,defend:0,stun:0,feints:0,pressure:0});aiText(brains[i],'waiting')}pose(a);pose(b);$('aiState').textContent='Stopped · Both fighters reset';status.textContent='READY'}
+$('aiStart').onclick=()=>{if(fightOver)aiReset();if(!autonomous)aiReset();autonomous=true;aiPaused=false;$('aiState').textContent='AI vs AI running';};
+$('aiPause').onclick=()=>{if(autonomous){aiPaused=!aiPaused;$('aiPause').textContent=aiPaused?'Resume':'Pause';$('aiState').textContent=aiPaused?'AI vs AI paused':'AI vs AI running'}};
+$('aiStop').onclick=()=>{aiReset();$('aiPause').textContent='Pause'};
+let action='idle',elapsed=0,duration=1,loop=true,queued='';function smooth(x){x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)}function pulse(t,a,b,c,d){return smooth((t-a)/(b-a))*(1-smooth((t-c)/(d-c)))}function trigger(x){if(autonomous)aiReset();resetBlue();approachType=null;missedTypes=[];attempts=0;action=x;elapsed=0;duration=x==='jab'?.65:x==='kick'?1.2:x==='hook'?.85:x==='boxing'?2.0:2.1;queued='';resetChecks();status.textContent=x==='jab'?'LEAD JAB':x==='kick'?'REAR ROUNDHOUSE':x==='boxing'?'JAB → CROSS → LEAD HOOK':x==='hook'?'LEAD HOOK':'JAB → ROUNDHOUSE'}
+function gap(){return Math.max(0,b.root.position.distanceTo(a.root.position)-.56)}
+function startApproach(type){
+ if(!$('autoClose').checked||attempts>=5)return false;
+ approachType=type;action='approach';elapsed=0;attempts++;
+ $('decision').textContent='Missed '+type+' — closing distance (attempt '+attempts+'/5)';
+ status.textContent='AI: STEPPING INTO RANGE';return true;
+}
+function animate(dt){const speed=Number($('speed').value);const step=dt*speed;if(!autonomous&&[...falls.values()].some(x=>x.mode!=='standing')){pose(a);pose(b);updateFalls(step);return;}if(autonomous){if(!aiPaused)aiStep(step);enforceArena();return;}
+ $('range').textContent='Fighter separation: '+a.root.position.distanceTo(b.root.position).toFixed(2)+' m · body gap: '+gap().toFixed(2)+' m';
+ if(action==='approach'){
+  // Approach by moving the root, not manipulating any bones. Stop short of body overlap.
+  const separation=a.root.position.distanceTo(b.root.position);
+  const desired=approachType==='kick'?.94:.94;
+  const travel=Math.min(Math.max(0,separation-desired),.65*step);
+  a.root.position.x+=travel;constrainToCage(a);
+  pose(a,{bob:Math.sin(performance.now()*.018)*.026});updateBlue(step,false);
+  if(separation<=desired+.012){
+   const next=approachType;approachType=null;
+   $('decision').textContent='In range — retrying '+next;
+   action=next;elapsed=0;duration=next==='jab'?.65:next==='kick'?1.2:.7;resetChecks();
+  }
+  return;
+ }
+ elapsed+=step;let jab=0,cross=0,hook=0,hookPhase=0,kick=0,yaw=0,lean=0,bob=Math.sin(performance.now()*.002)*.015;if(action==='jab'){jab=pulse(elapsed,0,.09,.20,.37);yaw=-jab*.13;lean=-jab*.06}else if(action==='kick'){kick=pulse(elapsed,.12,.39,.64,.96);yaw=-kick*.10;lean=kick*.09;bob+=kick*.07}else if(action==='combo'){jab=pulse(elapsed,0,.14,.25,.43);kick=pulse(elapsed,.65,.95,1.35,1.7);yaw=-jab*.13-kick*.10;lean=kick*.09;bob+=kick*.07}else if(action==='hook'){hookPhase=Math.max(0,Math.min(1,(elapsed-.08)/.62));hook=pulse(elapsed,.04,.17,.49,.68);yaw=-hook*.35;lean=-hook*.07}else if(action==='boxing'){jab=pulse(elapsed,0,.085,.19,.34);cross=pulse(elapsed,.44,.54,.69,.83);hook=pulse(elapsed,.96,1.11,1.39,1.60);hookPhase=Math.max(0,Math.min(1,(elapsed-.96)/.64));yaw=-jab*.13+cross*.18-hook*.35;lean=-jab*.04+cross*.04-hook*.09}pose(a,{jab,cross,hook,hookPhase,kick,yaw,lean,bob,twist:yaw*.65-kick*.42,head:redReact*.13});updateBlue(step,jab>.12||cross>.12||hook>.12||kick>.12);redReact=Math.max(0,redReact-step);
+a.root.updateMatrixWorld(true);b.root.updateMatrixWorld(true);
+detectStrike('jab',jab);detectStrike('cross',cross);detectStrike('hook',hook);detectStrike('kick',kick);
+endAttempt('jab',jab);endAttempt('cross',cross);endAttempt('hook',hook);endAttempt('kick',kick);
+impactFlash=Math.max(0,impactFlash-dt*speed);defenderReact=Math.max(0,defenderReact-dt*speed);
+hitMarker.material.opacity=impactFlash>0?impactFlash/.30*.85:0;
+headTarget.material.opacity=.82;bodyTarget.material.opacity=.82;
+ // Only act on misses after a complete technique. Do not approach mid-strike.
+ if(elapsed>=duration){
+  const miss=missedTypes.shift();missedTypes=[];
+  if(miss&&startApproach(miss))return;
+  if(miss){$('decision').textContent='Missed '+miss+' — approach limit reached or disabled'}
+  else if(action!=='idle'){$('decision').textContent='Strike completed · '+(jabChecked||crossChecked||hookChecked||kickChecked?'contact registered':'no approach needed')}
+  if($('loop').checked&&action!=='idle'){elapsed=-.30;resetChecks();attempts=0}
+  else{action='idle';status.textContent='READY · Choose a technique'}
+ }
+}
+$('jab').onclick=()=>trigger('jab');$('kick').onclick=()=>trigger('kick');$('combo').onclick=()=>trigger('combo');$('boxing').onclick=()=>trigger('boxing');$('hook').onclick=()=>trigger('hook');$('reset').onclick=()=>{aiReset();action='idle';elapsed=0;approachType=null;missedTypes=[];attempts=0;a.root.position.x=-.78;resetChecks();resetBlue();$('decision').textContent='AI waiting for a technique';status.textContent='READY'};$('speed').oninput=()=>{$('speedText').textContent=Number($('speed').value).toFixed(1)+'×'};$('camera').onchange=e=>setCamera(e.target.value);
+let last=performance.now();function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-last)/1000);last=now;animationDelta=dt;animate(dt);enforceArena();controls.update();renderer.render(scene,camera)}const resize=new ResizeObserver(()=>{const w=container.clientWidth,h=container.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)});resize.observe(container);pose(a);pose(b);status.textContent='READY · Choose a technique';requestAnimationFrame(frame);
+}catch(e){$('error').textContent='3D initialization failed: '+e.message;status.textContent='GRAPHICS ERROR';console.error(e)}
+</script></body></html>
