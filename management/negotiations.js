@@ -26,7 +26,7 @@ let negotiatingId=null;let negotiationSession=null;
 function negotiationClose(){const el=document.getElementById('negotiationOverlay');if(el)el.remove();negotiatingId=null;negotiationSession=null}
 function negotiate(id){
  const f=state.fighters.find(x=>x.id===id);
- if(!f||!f.scouted||f.promotion===state.player)return;
+ if(!f||(!f.scouted&&!REGION.includes(f.promotion))||f.promotion===state.player)return;
  negotiatingId=id;negotiationSession={round:1,maxRounds:3,counter:null,history:[],patience:3};
  const {band,target}=fighterDemand(f);
  const show=target,win=target,months=24,fights=4;
@@ -100,7 +100,7 @@ function signNegotiatedContract(f,o){
  if(state.cash<o.bonus+o.show)return alert('Insufficient funds for the signing bonus and first purse.');
  const origin=f.promotion;state.cash-=o.bonus;
  if(f.status==='Amateur'){f.status='Professional';log(f.name+' turns professional after an amateur record of '+f.amateurWins+'-'+f.amateurLosses+'.')}
- f.promotion=state.player;state.contracts=state.contracts.filter(c=>c.id!==f.id);
+ f.promotion=state.player;f.scouted=Math.max(2,Number(f.scouted)||0);state.contracts=state.contracts.filter(c=>c.id!==f.id);
  state.contracts.push({id:f.id,show:o.show,win:o.win,structure:o.flat?'flat':'showwin',signing:o.bonus,fights:o.fights,weeks:Math.round(o.months*52/12),start:now(),origin});
  log(state.player+' signs '+f.name+' from '+origin+': '+offerText(o));
  const summary=f.name+': '+offerText(o)+' — ACCEPTED in round '+negotiationSession.round;
