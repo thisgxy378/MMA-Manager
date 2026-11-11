@@ -13,18 +13,39 @@ const NATIONALITIES=["New Zealand","Australia","Brazil","New Zealand","United St
 const MALE_DIVISIONS=['Flyweight','Bantamweight','Featherweight','Lightweight','Welterweight','Middleweight','Light Heavyweight','Heavyweight'];const FEMALE_DIVISIONS=['Atomweight','Strawweight','Flyweight','Bantamweight','Featherweight'];
 const divisions=['Flyweight','Bantamweight','Featherweight','Lightweight','Welterweight','Middleweight','Light Heavyweight','Heavyweight'];
 const $=id=>document.getElementById(id);const money=n=>'$'+Math.round(n).toLocaleString('en-US');const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
-const FIGHTER_ATTRIBUTES=[['striking','Striking'],['power','Power'],['strikingDefense','Striking defence'],['wrestling','Wrestling'],['grappling','Grappling'],['submissionDefense','Submission defence'],['cardio','Cardio'],['chin','Chin'],['speed','Speed'],['fightIQ','Fight IQ']];
+const ATTRIBUTE_GROUPS=[
+ {key:'striking',label:'Striking',skills:[['punchSpeed','Punch speed'],['punchPower','Punch power'],['kickSpeed','Kick speed'],['kickPower','Kick power'],['accuracy','Accuracy'],['strikingDefense','Striking defence'],['footwork','Footwork']]},
+ {key:'grappling',label:'Grappling',skills:[['takedowns','Takedowns'],['takedownDefense','Takedown defence'],['topControl','Top control'],['bottomGame','Bottom game'],['submissions','Submissions'],['submissionDefense','Submission defence'],['clinch','Clinch']]},
+ {key:'cardio',label:'Cardio',skills:[['stamina','Stamina'],['endurance','Endurance'],['recovery','Recovery'],['pace','Fight pace'],['durability','Durability']]},
+ {key:'mental',label:'Mental',skills:[['fightIQ','Fight IQ'],['composure','Composure'],['discipline','Discipline'],['adaptability','Adaptability'],['determination','Determination']]}
+];
+const FIGHTER_ATTRIBUTES=ATTRIBUTE_GROUPS.flatMap(g=>g.skills);
+const ATTRIBUTE_LEGACY={punchSpeed:'speed',punchPower:'power',kickSpeed:'speed',kickPower:'power',accuracy:'striking',footwork:'strikingDefense',takedowns:'wrestling',takedownDefense:'wrestling',topControl:'grappling',bottomGame:'grappling',submissions:'grappling',stamina:'cardio',endurance:'cardio',recovery:'cardio',pace:'cardio',durability:'chin',composure:'fightIQ',discipline:'fightIQ',adaptability:'fightIQ',determination:'fightIQ',clinch:'grappling'};
 function ensureFighterAttributes(f){
  if(!f.attributes||typeof f.attributes!=='object')f.attributes={};
- const seed=Number(f.id)||1,base=Number(f.skill)||60;
- FIGHTER_ATTRIBUTES.forEach(([key],i)=>{if(!Number.isFinite(Number(f.attributes[key]))){const noise=((seed*37+i*73+Math.floor(seed/(i+1))*19)%25)-12;f.attributes[key]=Math.max(20,Math.min(99,base+noise))}});
- return f.attributes;
+ const a=f.attributes,seed=Number(f.id)||1,base=Number(f.skill)||60;
+ FIGHTER_ATTRIBUTES.forEach(([key],i)=>{
+  if(!Number.isFinite(Number(a[key]))){
+   const legacy=ATTRIBUTE_LEGACY[key],source=legacy&&Number.isFinite(Number(a[legacy]))?Number(a[legacy]):base;
+   const noise=((seed*37+i*73+Math.floor(seed/(i+1))*19)%17)-8;
+   a[key]=Math.max(20,Math.min(99,Math.round(source+noise)));
+  }
+ });
+ return a;
 }
-function combatRating(f){const a=ensureFighterAttributes(f);return Math.round(FIGHTER_ATTRIBUTES.reduce((total,[k])=>total+a[k],0)/FIGHTER_ATTRIBUTES.length)}
-function matchupRating(f,opponent){const a=ensureFighterAttributes(f),b=ensureFighterAttributes(opponent);
- const standup=(a.striking*.3+a.power*.18+a.speed*.17+a.strikingDefense*.2+a.fightIQ*.15)-(b.strikingDefense*.35+b.chin*.25+b.speed*.15+b.fightIQ*.25);
- const ground=(a.wrestling*.35+a.grappling*.35+a.fightIQ*.3)-(b.wrestling*.3+b.grappling*.2+b.submissionDefense*.3+b.fightIQ*.2);
- return combatRating(f)+standup*.12+ground*.12;
+function attributeGroups(f){
+ const a=ensureFighterAttributes(f);
+ return ATTRIBUTE_GROUPS.map(g=>({...g,rating:Math.round(g.skills.reduce((sum,[key])=>sum+a[key],0)/g.skills.length)}));
+}
+function combatRating(f){const groups=attributeGroups(f);return Math.round(groups.reduce((sum,g)=>sum+g.rating,0)/groups.length)}
+function matchupRating(f,opponent){
+ const a=ensureFighterAttributes(f),b=ensureFighterAttributes(opponent);
+ const offense=a.punchSpeed*.13+a.punchPower*.16+a.kickSpeed*.08+a.kickPower*.1+a.accuracy*.19+a.footwork*.12+a.fightIQ*.22;
+ const defense=b.strikingDefense*.38+b.footwork*.2+b.durability*.2+b.composure*.22;
+ const ground=a.takedowns*.23+a.topControl*.22+a.submissions*.23+a.clinch*.12+a.fightIQ*.2;
+ const resistance=b.takedownDefense*.3+b.bottomGame*.2+b.submissionDefense*.35+b.fightIQ*.15;
+ const conditioning=(a.stamina+a.endurance+a.recovery+a.pace)/4;
+ return combatRating(f)+(offense-defense)*.18+(ground-resistance)*.16+(conditioning-70)*.05;
 }
 function potentialRange(f){const p=Math.max(25,Math.min(99,Number(f.potential)||50));return Math.max(20,p-6)+'–'+Math.min(99,p+6)}
 function updateFighterDevelopment(f,won,method,damage=0,opponent=null){
