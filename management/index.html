@@ -16,7 +16,16 @@ const DIVISIONS_BY_GENDER={
  Female:['Atomweight','Strawweight','Flyweight','Bantamweight','Featherweight','Lightweight']
 };
 const divisions=[...new Set([...DIVISIONS_BY_GENDER.Male,...DIVISIONS_BY_GENDER.Female])];
-function sameFightDivision(a,b){return !!a&&!!b&&a.division===b.division&&(a.gender||'Male')===(b.gender||'Male');}
+function divisionSteps(f){return DIVISIONS_BY_GENDER[f.gender||'Male']||DIVISIONS_BY_GENDER.Male}
+function eligibleFightDivision(a,b){if(!a||!b||(a.gender||'Male')!==(b.gender||'Male'))return false;const ds=divisionSteps(a),x=ds.indexOf(a.division),y=ds.indexOf(b.division);return x>=0&&y>=0&&Math.abs(x-y)<=1}
+function sameFightDivision(a,b){return eligibleFightDivision(a,b)}
+function changeFighterDivision(id,newDivision){
+ const f=state.fighters.find(x=>x.id===Number(id));if(!f||f.promotion!==state.player)return false;
+ const ds=divisionSteps(f),from=ds.indexOf(f.division),to=ds.indexOf(newDivision);
+ if(from<0||to<0||Math.abs(from-to)!==1)return false;
+ if(state.events.some(e=>!e.done&&((e.bouts||[]).some(b=>b.aid===f.id||b.bid===f.id)||e.aid===f.id||e.bid===f.id)))return false;
+ f.division=newDivision;save();render();return true;
+}
 const $=id=>document.getElementById(id);const money=n=>'$'+Math.round(n).toLocaleString('en-US');const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 const ATTRIBUTE_GROUPS=[
  {key:'striking',label:'Striking',skills:[['punchSpeed','Punch speed'],['punchPower','Punch power'],['kickSpeed','Kick speed'],['kickPower','Kick power'],['accuracy','Accuracy'],['blocking','Blocking'],['headMovement','Head movement'],['footwork','Footwork']]},
