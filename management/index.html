@@ -23,9 +23,9 @@ const FIGHTING_STYLES={
  boxer:{label:'Boxer',boost:['punchSpeed','punchPower','accuracy','headMovement','footwork'],penalty:['takedowns','submissions']},
  kickboxer:{label:'Kickboxer',boost:['kickSpeed','kickPower','rangeManagement','clinchStriking','accuracy'],penalty:['groundControl','submissions']},
  wrestler:{label:'Wrestler',boost:['takedowns','takedownDefense','groundControl','stamina','clinchControl'],penalty:['kickSpeed','submissions']},
- submission:{label:'Submission specialist',boost:['submissions','submissionDefense','groundEscapes','groundControl','fightIQ'],penalty:['punchPower','kickPower']},
- clinch:{label:'Clinch specialist',boost:['clinchControl','clinchStriking','takedownDefense','body','determination'],penalty:['kickSpeed','groundEscapes']},
- balanced:{label:'Well-rounded',boost:['fightIQ','adaptability','endurance'],penalty:[]}
+ submission:{label:'Jiu-Jitsu',boost:['submissions','submissionDefense','groundEscapes','groundControl','fightIQ'],penalty:['punchPower','kickPower']},
+ clinch:{label:'Muay Thai',boost:['clinchControl','clinchStriking','takedownDefense','body','determination'],penalty:['kickSpeed','groundEscapes']},
+ balanced:{label:'MMA',boost:['fightIQ','adaptability','endurance'],penalty:[]}
 };
 const REAL_FIGHTER_STYLES={'Islam Makhachev':'wrestler','Khabib Nurmagomedov':'wrestler','Merab Dvalishvili':'wrestler','Khamzat Chimaev':'wrestler','Arman Tsarukyan':'wrestler','Usman Nurmagomedov':'wrestler','Alex Pereira':'kickboxer','Israel Adesanya':'kickboxer','Stamp Fairtex':'kickboxer','Dakota Ditcheva':'kickboxer','Carlos Prates':'kickboxer','Sean O\'Malley':'kickboxer','Charles Oliveira':'submission','Roberto de Souza':'submission','Kleber Koike Erbst':'submission','Reinier de Ridder':'submission','Jack Della Maddalena':'boxer','Ilia Topuria':'boxer','Max Holloway':'boxer','Francis Ngannou':'boxer','Tom Aspinall':'balanced','Alexander Volkanovski':'balanced','Valentina Shevchenko':'balanced'};
 function ensureFightingStyle(f){
