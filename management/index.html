@@ -16,11 +16,11 @@ const $=id=>document.getElementById(id);const money=n=>'$'+Math.round(n).toLocal
 const ATTRIBUTE_GROUPS=[
  {key:'striking',label:'Striking',skills:[['punchSpeed','Punch speed'],['punchPower','Punch power'],['kickSpeed','Kick speed'],['kickPower','Kick power'],['accuracy','Accuracy'],['blocking','Blocking'],['headMovement','Head movement'],['footwork','Footwork']]},
  {key:'grappling',label:'Grappling',disciplines:[{key:'wrestling',label:'Wrestling',weight:.4,skills:[['takedowns','Takedowns'],['takedownDefense','Takedown defence'],['groundControl','Ground control']]},{key:'jiuJitsu',label:'Jiu-Jitsu',weight:.4,skills:[['submissions','Submissions'],['submissionDefense','Submission defence'],['groundEscapes','Ground escapes']]},{key:'clinch',label:'Clinch',weight:.2,skills:[['clinchControl','Clinch control'],['clinchStriking','Clinch striking']]}]},
- {key:'health',label:'Health',skills:[['stamina','Stamina'],['endurance','Endurance'],['recovery','Recovery'],['pace','Fight pace'],['durability','Durability'],['chin','Chin'],['body','Body'],['legs','Legs']]},
+ {key:'health',label:'Health',skills:[['stamina','Stamina'],['endurance','Endurance'],['recovery','Recovery'],['pace','Fight pace'],['chin','Chin'],['body','Body'],['legs','Legs']]},
  {key:'mental',label:'Mental',skills:[['fightIQ','Fight IQ'],['composure','Composure'],['discipline','Discipline'],['adaptability','Adaptability'],['determination','Determination']]}
 ];
 const FIGHTER_ATTRIBUTES=ATTRIBUTE_GROUPS.flatMap(g=>g.disciplines?g.disciplines.flatMap(d=>d.skills):g.skills);
-const ATTRIBUTE_LEGACY={body:'durability',legs:'durability',groundControl:'topControl',groundEscapes:'bottomGame',clinchControl:'clinch',clinchStriking:'clinch',blocking:'strikingDefense',headMovement:'strikingDefense',punchSpeed:'speed',punchPower:'power',kickSpeed:'speed',kickPower:'power',accuracy:'striking',footwork:'strikingDefense',takedowns:'wrestling',takedownDefense:'wrestling',topControl:'grappling',bottomGame:'grappling',submissions:'grappling',stamina:'cardio',endurance:'cardio',recovery:'cardio',pace:'cardio',durability:'chin',composure:'fightIQ',discipline:'fightIQ',adaptability:'fightIQ',determination:'fightIQ',clinch:'grappling'};
+const ATTRIBUTE_LEGACY={body:'durability',legs:'durability',groundControl:'topControl',groundEscapes:'bottomGame',clinchControl:'clinch',clinchStriking:'clinch',blocking:'strikingDefense',headMovement:'strikingDefense',punchSpeed:'speed',punchPower:'power',kickSpeed:'speed',kickPower:'power',accuracy:'striking',footwork:'strikingDefense',takedowns:'wrestling',takedownDefense:'wrestling',topControl:'grappling',bottomGame:'grappling',submissions:'grappling',stamina:'cardio',endurance:'cardio',recovery:'cardio',pace:'cardio',composure:'fightIQ',discipline:'fightIQ',adaptability:'fightIQ',determination:'fightIQ',clinch:'grappling'};
 function ensureFighterAttributes(f){
  if(!f.attributes||typeof f.attributes!=='object')f.attributes={};
  const a=f.attributes,seed=Number(f.id)||1,base=Number(f.skill)||60;
@@ -43,7 +43,7 @@ function syncFighterAbility(f){f.skill=combatRating(f);return f.skill}
 function matchupRating(f,opponent){
  const a=ensureFighterAttributes(f),b=ensureFighterAttributes(opponent);
  const offense=a.punchSpeed*.13+a.punchPower*.16+a.kickSpeed*.08+a.kickPower*.1+a.accuracy*.19+a.footwork*.12+a.fightIQ*.22;
- const defense=b.blocking*.19+b.headMovement*.19+b.footwork*.2+b.chin*.14+b.durability*.06+b.composure*.22;
+ const defense=b.blocking*.19+b.headMovement*.19+b.footwork*.2+b.chin*.2+b.composure*.22;
  const ground=a.takedowns*.23+a.groundControl*.22+a.submissions*.23+a.clinchControl*.12+a.fightIQ*.2;
  const resistance=b.takedownDefense*.3+b.groundEscapes*.2+b.submissionDefense*.35+b.fightIQ*.15;
  const conditioning=(a.stamina+a.endurance+a.recovery+a.pace)/4;
