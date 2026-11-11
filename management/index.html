@@ -44,7 +44,9 @@ function ensureFighterAttributes(f){
   if(!Number.isFinite(Number(a[key]))){
    const legacy=ATTRIBUTE_LEGACY[key],source=legacy&&Number.isFinite(Number(a[legacy]))?Number(a[legacy]):base;
    const noise=((seed*37+i*73+Math.floor(seed/(i+1))*19)%17)-8;
-   const styleOffset=style.primary.includes(key)?10:style.secondary.includes(key)?5:0;
+   // Style strengths are tendencies, not fixed bonuses; each fighter varies by skill.
+   const variation=((seed*53+i*29+Math.floor(seed/(i+1))*11)%11)-5;
+   const styleOffset=style.primary.includes(key)?Math.max(0,10+variation):style.secondary.includes(key)?Math.max(0,5+variation):0;
    a[key]=Math.max(20,Math.min(99,Math.round(source+noise+styleOffset)));
   }
  });
