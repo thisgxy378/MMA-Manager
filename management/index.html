@@ -20,12 +20,12 @@ const ATTRIBUTE_GROUPS=[
  {key:'mental',label:'Mental',skills:[['fightIQ','Fight IQ'],['composure','Composure'],['discipline','Discipline'],['adaptability','Adaptability'],['determination','Determination'],['rangeManagement','Range management'],['aggression','Aggression']]}
 ];
 const FIGHTING_STYLES={
- boxer:{label:'Boxer',boost:['punchSpeed','punchPower','accuracy','headMovement','footwork'],penalty:['takedowns','submissions']},
- kickboxer:{label:'Kickboxer',boost:['kickSpeed','kickPower','rangeManagement','clinchStriking','accuracy'],penalty:['groundControl','submissions']},
- wrestler:{label:'Wrestler',boost:['takedowns','takedownDefense','groundControl','stamina','clinchControl'],penalty:['kickSpeed','submissions']},
- submission:{label:'Jiu-Jitsu',boost:['submissions','submissionDefense','groundEscapes','groundControl','fightIQ'],penalty:['punchPower','kickPower']},
- clinch:{label:'Muay Thai',boost:['clinchControl','clinchStriking','takedownDefense','body','determination'],penalty:['kickSpeed','groundEscapes']},
- balanced:{label:'MMA',boost:['fightIQ','adaptability','endurance'],penalty:[]}
+ boxer:{label:'Boxing',primary:['punchSpeed','punchPower','accuracy'],secondary:['headMovement','footwork']},
+ kickboxer:{label:'Kickboxing',primary:['kickSpeed','kickPower','rangeManagement'],secondary:['accuracy','footwork']},
+ wrestler:{label:'Wrestling',primary:['takedowns','takedownDefense','groundControl'],secondary:['stamina','clinchControl']},
+ submission:{label:'Jiu-Jitsu',primary:['submissions','submissionDefense','groundEscapes'],secondary:['groundControl','fightIQ']},
+ clinch:{label:'Muay Thai',primary:['clinchControl','clinchStriking','kickPower'],secondary:['body','determination']},
+ balanced:{label:'MMA',primary:['fightIQ','adaptability','discipline'],secondary:[]}
 };
 const REAL_FIGHTER_STYLES={'Islam Makhachev':'wrestler','Khabib Nurmagomedov':'wrestler','Merab Dvalishvili':'wrestler','Khamzat Chimaev':'wrestler','Arman Tsarukyan':'wrestler','Usman Nurmagomedov':'wrestler','Alex Pereira':'kickboxer','Israel Adesanya':'kickboxer','Stamp Fairtex':'kickboxer','Dakota Ditcheva':'kickboxer','Carlos Prates':'kickboxer','Sean O\'Malley':'kickboxer','Charles Oliveira':'submission','Roberto de Souza':'submission','Kleber Koike Erbst':'submission','Reinier de Ridder':'submission','Jack Della Maddalena':'boxer','Ilia Topuria':'boxer','Max Holloway':'boxer','Francis Ngannou':'boxer','Tom Aspinall':'balanced','Alexander Volkanovski':'balanced','Valentina Shevchenko':'balanced'};
 function ensureFightingStyle(f){
@@ -43,7 +43,7 @@ function ensureFighterAttributes(f){
   if(!Number.isFinite(Number(a[key]))){
    const legacy=ATTRIBUTE_LEGACY[key],source=legacy&&Number.isFinite(Number(a[legacy]))?Number(a[legacy]):base;
    const noise=((seed*37+i*73+Math.floor(seed/(i+1))*19)%17)-8;
-   const styleOffset=style.boost.includes(key)?8:style.penalty.includes(key)?-6:0;
+   const styleOffset=style.primary.includes(key)?10:style.secondary.includes(key)?5:0;
    a[key]=Math.max(20,Math.min(99,Math.round(source+noise+styleOffset)));
   }
  });
