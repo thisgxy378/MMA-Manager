@@ -16,7 +16,7 @@ const $=id=>document.getElementById(id);const money=n=>'$'+Math.round(n).toLocal
 const ATTRIBUTE_GROUPS=[
  {key:'striking',label:'Striking',skills:[['punchSpeed','Punch speed'],['punchPower','Punch power'],['kickSpeed','Kick speed'],['kickPower','Kick power'],['accuracy','Accuracy'],['strikingDefense','Striking defence'],['footwork','Footwork']]},
  {key:'grappling',label:'Grappling',skills:[['takedowns','Takedowns'],['takedownDefense','Takedown defence'],['topControl','Top control'],['bottomGame','Bottom game'],['submissions','Submissions'],['submissionDefense','Submission defence'],['clinch','Clinch']]},
- {key:'cardio',label:'Cardio',skills:[['stamina','Stamina'],['endurance','Endurance'],['recovery','Recovery'],['pace','Fight pace'],['durability','Durability']]},
+ {key:'health',label:'Health',skills:[['stamina','Stamina'],['endurance','Endurance'],['recovery','Recovery'],['pace','Fight pace'],['durability','Durability']]},
  {key:'mental',label:'Mental',skills:[['fightIQ','Fight IQ'],['composure','Composure'],['discipline','Discipline'],['adaptability','Adaptability'],['determination','Determination']]}
 ];
 const FIGHTER_ATTRIBUTES=ATTRIBUTE_GROUPS.flatMap(g=>g.skills);
@@ -37,7 +37,7 @@ function attributeGroups(f){
  const a=ensureFighterAttributes(f);
  return ATTRIBUTE_GROUPS.map(g=>({...g,rating:Math.round(g.skills.reduce((sum,[key])=>sum+a[key],0)/g.skills.length)}));
 }
-const ATTRIBUTE_WEIGHTS={striking:.30,grappling:.30,cardio:.20,mental:.20};
+const ATTRIBUTE_WEIGHTS={striking:.30,grappling:.30,health:.20,mental:.20};
 function combatRating(f){return Math.round(attributeGroups(f).reduce((sum,g)=>sum+g.rating*ATTRIBUTE_WEIGHTS[g.key],0))}
 function syncFighterAbility(f){f.skill=combatRating(f);return f.skill}
 function matchupRating(f,opponent){
