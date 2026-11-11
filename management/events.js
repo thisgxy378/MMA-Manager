@@ -104,7 +104,42 @@ function fightFinishMethod(winner,loser){
  const roll=Math.random()*100;
  return roll<ko?'TKO':roll<ko+sub?'Submission':'Decision';
 }
-function runEvent(){const due=state.events.filter(e=>!e.done&&eventDate(e)<=state.date);if(due.some(e=>!eventNormalize(e).bouts.length))return alert('Add at least one fight to every due event before simulation.');for(const e of due){const p=forecast(e),results=[],finishers=[];let purses=0,topFight='',topScore=-1;for(const b of e.bouts){const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return alert('Missing fighter in card.');const w=Math.random()<Math.max(.05,Math.min(.95,.5+(matchupRating(a,c)-matchupRating(c,a))/110))?a:c,l=w===a?c:a;const method=fightFinishMethod(w,l);const damage=method==='TKO'?rand(65,100):method==='Submission'?rand(20,55):rand(10,55);const winDamage=rand(5,Math.max(10,Math.round(damage*.65)));w.wins++;l.losses++;const winGrowth=updateFighterDevelopment(w,true,method,winDamage,l),lossGrowth=updateFighterDevelopment(l,false,method,damage,w);b.damage=damage;b.potentialChanges={[w.id]:winGrowth,[l.id]:lossGrowth};w.popularity=Math.min(99,w.popularity+rand(2,6));b.result=w.name+' defeats '+l.name+' by '+method+' (damage '+damage+'/100; potential '+(winGrowth>=0?'+':'')+winGrowth+' / '+lossGrowth+')';results.push(b.result);const score=a.skill+c.skill+rand(0,35);if(score>topScore){topScore=score;topFight=a.name+' vs '+c.name}if(method!=='Decision')finishers.push(w);for(const f of [a,c]){const contract=state.contracts.find(x=>x.id===f.id);if(contract){purses+=contract.show+(f===w?contract.win:0);contract.fights=Math.max(0,contract.fights-1)}f.unavailableUntil=addDays(state.date,method==='Decision'?21:35)}}e.results=results;e.result=results[0];e.awards={fight:topFight,performances:finishers.slice(0,2).map(f=>f.name)};e.actualProfit=p.revenue-purses-e.venueCost-e.production-(e.staffing||0)-(e.security||0)-(e.insurance||0)-(e.logistics||0)-e.marketing-e.bonuses-(e.extraMarketing||0);e.done=true;state.cash+=e.actualProfit;log(e.name+' completed: '+results.length+' bouts, net '+money(e.actualProfit)+'.')}save();render()}
+function simulateFightRounds(a,b,scheduledRounds){
+ const rounds=[],scores={[a.id]:0,[b.id]:0},damage={[a.id]:0,[b.id]:0};
+ const stamina={[a.id]:100,[b.id]:100},maxRounds=Math.max(1,Math.min(5,Number(scheduledRounds)||3));
+ for(let round=1;round<=maxRounds;round++){
+  const aa=ensureFighterAttributes(a),bb=ensureFighterAttributes(b);
+  const effective=(f,opp)=>matchupRating(f,opp)+(stamina[f.id]-stamina[opp.id])*.17-(damage[f.id]-damage[opp.id])*.13;
+  const edge=effective(a,b)-effective(b,a)+rand(-22,22);
+  const roundWinner=edge>=0?a:b,roundLoser=roundWinner===a?b:a;
+  const aw=ensureFighterAttributes(roundWinner),al=ensureFighterAttributes(roundLoser);
+  const activity=Math.max(4,Math.round(10+(aw.pace-65)*.13+rand(-3,6)));
+  const roundDamage=Math.max(3,Math.round(activity*(.55+aw.punchPower/180)+rand(-3,4)));
+  damage[roundLoser.id]+=roundDamage;
+  damage[roundWinner.id]+=Math.max(1,Math.round(roundDamage*.35));
+  const margin=Math.abs(edge),dominant=margin>30&&roundDamage>=17;
+  scores[roundWinner.id]+=10;scores[roundLoser.id]+=dominant?8:9;
+  stamina[a.id]=Math.max(5,stamina[a.id]-Math.max(5,Math.round(10+(100-aa.stamina)*.13+(100-aa.endurance)*.08+rand(-3,4))));
+  stamina[b.id]=Math.max(5,stamina[b.id]-Math.max(5,Math.round(10+(100-bb.stamina)*.13+(100-bb.endurance)*.08+rand(-3,4))));
+  const roundInfo={round,winner:roundWinner.name,score:dominant?'10-8':'10-9',damage:{[a.id]:damage[a.id],[b.id]:damage[b.id]},stamina:{[a.id]:stamina[a.id],[b.id]:stamina[b.id]}};
+  rounds.push(roundInfo);
+  // Finishes become more likely as accumulated damage and fatigue rise.
+  const koAttack=aw.punchPower*.42+aw.kickPower*.28+aw.accuracy*.2+aw.aggression*.1;
+  const koDefense=al.chin*.55+al.blocking*.25+al.headMovement*.2;
+  const subAttack=aw.submissions*.5+aw.groundControl*.22+aw.takedowns*.18+aw.fightIQ*.1;
+  const subDefense=al.submissionDefense*.5+al.groundEscapes*.3+al.takedownDefense*.2;
+  const koChance=Math.max(.005,Math.min(.24,.025+(koAttack-koDefense)*.0015+damage[roundLoser.id]*.0007));
+  const subChance=Math.max(.003,Math.min(.16,.012+(subAttack-subDefense)*.0015+(100-stamina[roundLoser.id])*.0003));
+  const roll=Math.random();
+  if(roll<koChance+subChance){
+   const method=roll<koChance?'TKO':'Submission';
+   return {winner:roundWinner,loser:roundLoser,method,finishRound:round,rounds,scores,damage,stamina};
+  }
+ }
+ const winner=scores[a.id]===scores[b.id]?(Math.random()<.5?a:b):(scores[a.id]>scores[b.id]?a:b);
+ return {winner,loser:winner===a?b:a,method:'Decision',finishRound:maxRounds,rounds,scores,damage,stamina};
+}
+function runEvent(){const due=state.events.filter(e=>!e.done&&eventDate(e)<=state.date);if(due.some(e=>!eventNormalize(e).bouts.length))return alert('Add at least one fight to every due event before simulation.');for(const e of due){const p=forecast(e),results=[],finishers=[];let purses=0,topFight='',topScore=-1;for(const b of e.bouts){const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return alert('Missing fighter in card.');const fight=simulateFightRounds(a,c,b.rounds);const w=fight.winner,l=fight.loser,method=fight.method;const damage=Math.min(100,fight.damage[l.id]);const winDamage=Math.min(100,fight.damage[w.id]);b.roundResults=fight.rounds;b.scorecards=fight.scores;b.finishRound=fight.finishRound;w.wins++;l.losses++;const winGrowth=updateFighterDevelopment(w,true,method,winDamage,l),lossGrowth=updateFighterDevelopment(l,false,method,damage,w);b.damage=damage;b.potentialChanges={[w.id]:winGrowth,[l.id]:lossGrowth};w.popularity=Math.min(99,w.popularity+rand(2,6));b.result=w.name+' defeats '+l.name+' by '+method+' (round '+fight.finishRound+(method==='Decision'?', '+fight.scores[w.id]+'-'+fight.scores[l.id]:'')+'; damage '+damage+'/100; potential '+(winGrowth>=0?'+':'')+winGrowth+' / '+lossGrowth+')';results.push(b.result);const score=a.skill+c.skill+rand(0,35);if(score>topScore){topScore=score;topFight=a.name+' vs '+c.name}if(method!=='Decision')finishers.push(w);for(const f of [a,c]){const contract=state.contracts.find(x=>x.id===f.id);if(contract){purses+=contract.show+(f===w?contract.win:0);contract.fights=Math.max(0,contract.fights-1)}f.unavailableUntil=addDays(state.date,method==='Decision'?21:35)}}e.results=results;e.result=results[0];e.awards={fight:topFight,performances:finishers.slice(0,2).map(f=>f.name)};e.actualProfit=p.revenue-purses-e.venueCost-e.production-(e.staffing||0)-(e.security||0)-(e.insurance||0)-(e.logistics||0)-e.marketing-e.bonuses-(e.extraMarketing||0);e.done=true;state.cash+=e.actualProfit;log(e.name+' completed: '+results.length+' bouts, net '+money(e.actualProfit)+'.')}save();render()}
 
 function migrateEvents(){if(state){state.events.forEach(eventNormalize)}}
 migrateEvents();save();const baseBind=bind;bind=function(){baseBind();if(tab==='Events')bindEventManager()};
