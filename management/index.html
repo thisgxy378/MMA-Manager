@@ -199,12 +199,21 @@ function rankingRecord(f,amateur=false){
  return {wins,losses,draws,total:wins+losses+draws};
 }
 function rankingScore(f,amateur=false){
+ const key=amateur?'amateurElo':'resultElo';
+ if(Number.isFinite(f[key]))return f[key];
+ // Legacy careers have no opponent-by-opponent history. Seed using records only.
  const r=rankingRecord(f,amateur);
- if(!r.total)return -1;
- // Results only: winning percentage, wins earned, and losses incurred.
- // Sample-size adjustment prevents 1-0 records from automatically outranking veterans.
- const adjustedRate=(r.wins+2)/(r.total+4);
- return adjustedRate*70+Math.min(r.wins,30)*1.4-Math.min(r.losses,30)*.65;
+ return 1000+Math.min(25,r.wins)*9-Math.min(25,r.losses)*11+
+ (r.total?((r.wins/r.total)-.5)*100:0);
+}
+function recordRankingResult(winner,loser,method,amateur=false){
+ const key=amateur?'amateurElo':'resultElo';
+ const wa=rankingScore(winner,amateur),la=rankingScore(loser,amateur);
+ const expected=1/(1+Math.pow(10,(la-wa)/400));
+ const finish=method==='KO'||method==='TKO'||method==='Submission';
+ const change=(finish?35:32)*(1-expected);
+ winner[key]=wa+change;
+ loser[key]=la-change;
 }
 function rankingsView(){
  const promotions=['Worldwide',...Object.keys(PROMOS),...REGION,'Free Agent'];
@@ -217,7 +226,7 @@ function rankingsView(){
  const eligible=pool.filter(f=>division==='Pound for Pound'||f.division===division);
  const ranked=eligible.slice().sort((a,b)=>rankingScore(b,promotion==='Streetbeefs')-rankingScore(a,promotion==='Streetbeefs')||(rankingRecord(b,promotion==='Streetbeefs').wins-rankingRecord(a,promotion==='Streetbeefs').wins)||a.name.localeCompare(b.name)).slice(0,15);
  const options=(values,current)=>values.map(v=>'<option value="'+esc(v)+'" '+(v===current?'selected':'')+'>'+esc(v)+'</option>').join('');
- return '<section class="panel"><h2>'+esc(promotion)+' · '+esc(gender)+' · '+esc(division)+'</h2><p class="sub">Live top 15 rankings, calculated solely from fight results (wins, losses and winning percentage). Pound for pound compares fighters across weight classes. Worldwide combines promotions; amateurs are excluded except in Streetbeefs.</p>'+
+ return '<section class="panel"><h2>'+esc(promotion)+' · '+esc(gender)+' · '+esc(division)+'</h2><p class="sub">Live top 15 rankings, ordered by hidden Elo-style ratings that update after each fight, taking opponent strength, upsets and finishes into account. Pound for pound compares fighters across weight classes. Worldwide combines promotions; amateurs are excluded except in Streetbeefs.</p>'+
  '<div class="event-fields"><label>Promotion<select id="rankPromotion">'+options(promotions,promotion)+'</select></label><label>Gender<select id="rankGender">'+options(['Male','Female'],gender)+'</select></label><label>Ranking<select id="rankDivision">'+options(['Pound for Pound',...classes],division)+'</select></label></div>'+
  (ranked.length?'<div style="overflow-x:auto"><table><thead><tr><th>Rank</th><th>Fighter</th><th>Division</th><th>Promotion</th><th>Record</th><th>Win %</th></tr></thead><tbody>'+
  ranked.map((f,i)=>'<tr><td><strong>#'+(i+1)+'</strong></td><td>'+esc(f.name)+'</td><td>'+esc(f.division)+'</td><td>'+esc(f.promotion)+'</td><td>'+(promotion==='Streetbeefs'?(f.amateurWins||0)+'-'+(f.amateurLosses||0):(f.wins||0)+'-'+(f.losses||0))+'</td><td>'+(rankingRecord(f,promotion==='Streetbeefs').total?Math.round(100*rankingRecord(f,promotion==='Streetbeefs').wins/rankingRecord(f,promotion==='Streetbeefs').total)+'%':'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="notice">No eligible fighters in this ranking yet.</div>')+
