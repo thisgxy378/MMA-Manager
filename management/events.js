@@ -117,12 +117,65 @@ function fightFinishMethod(winner,loser){
  const roll=Math.random()*100;
  return roll<ko?'TKO':roll<ko+sub?'Submission':'Decision';
 }
+
+/* Versioned competition rules. Numerical judging thresholds are simulator calibration, not ABC points. */
+const MMA_RULE_PROFILES={
+ ABC_2025:{id:'ABC_2025',scoring:'rounds',groundedHeadKnees:false,groundedHeadKicks:false,groundedHeadStomps:false,verticalElbows:true,roundSeconds:300,restSeconds:60},
+ ONE_GLOBAL:{id:'ONE_GLOBAL',scoring:'whole_bout',groundedHeadKnees:true,groundedHeadKicks:false,groundedHeadStomps:false,verticalElbows:true,roundSeconds:300,restSeconds:60},
+ RIZIN:{id:'RIZIN',scoring:'whole_bout',groundedHeadKnees:true,groundedHeadKicks:true,groundedHeadStomps:true,verticalElbows:true,roundSeconds:300,restSeconds:60}
+};
+function mmaRulesForPromotion(promotion){
+ const name=String(promotion||'').toUpperCase();
+ return name.includes('ONE')?MMA_RULE_PROFILES.ONE_GLOBAL:name.includes('RIZIN')?MMA_RULE_PROFILES.RIZIN:MMA_RULE_PROFILES.ABC_2025;
+}
+function mmaIsGrounded(contacts){
+ return (contacts||[]).some(c=>c.touchingCanvas&&!['leftHand','rightHand','leftFoot','rightFoot'].includes(c.bodyPart));
+}
+function mmaMoveLegal(move,defenderContacts,rules){
+ const grounded=mmaIsGrounded(defenderContacts);
+ if(move==='12_6_elbow')return !!rules.verticalElbows;
+ if(!grounded)return true;
+ if(move==='head_knee')return !!rules.groundedHeadKnees;
+ if(move==='head_kick'||move==='soccer_kick')return !!rules.groundedHeadKicks;
+ if(move==='head_stomp')return !!rules.groundedHeadStomps;
+ return true;
+}
+function mmaJudgeRound(x,y,judgeBias=0){
+ // Impact and damaging offensive grappling first; aggression/control are tie-breakers only.
+ const primary=f=>f.impact+f.submissionThreat*1.6+f.effectiveGrappling*.8;
+ const diff=primary(x)-primary(y)+judgeBias;
+ let side=Math.abs(diff)>1?Math.sign(diff):0;
+ if(!side)side=Math.sign(x.aggression-y.aggression);
+ if(!side)side=Math.sign(x.areaControl-y.areaControl);
+ if(!side)return [10,10];
+ const win=side>0?x:y,lose=side>0?y:x;
+ const severe=win.impact>=24&&win.impact>=lose.impact*2.5&&win.dominance>=22;
+ const overwhelming=win.impact>=50&&win.impact>=lose.impact*5&&win.dominance>=65;
+ const loserScore=overwhelming?7:severe?8:9;
+ return side>0?[10,loserScore]:[loserScore,10];
+}
+function mmaResolveScorecards(cards){
+ const votes=cards.map(c=>c.a>c.b?'A':c.b>c.a?'B':'DRAW');
+ const a=votes.filter(x=>x==='A').length,b=votes.filter(x=>x==='B').length,d=3-a-b;
+ if(a===3)return {winner:'A',method:'Unanimous Decision'};
+ if(b===3)return {winner:'B',method:'Unanimous Decision'};
+ if(a===2&&b===1)return {winner:'A',method:'Split Decision'};
+ if(b===2&&a===1)return {winner:'B',method:'Split Decision'};
+ if(a===2&&d===1)return {winner:'A',method:'Majority Decision'};
+ if(b===2&&d===1)return {winner:'B',method:'Majority Decision'};
+ if(d===3)return {winner:null,method:'Unanimous Draw'};
+ if(d===2)return {winner:null,method:'Majority Draw'};
+ if(a===1&&b===1&&d===1)return {winner:null,method:'Split Draw'};
+ return {winner:null,method:'Draw'};
+}
+
 function simulateFightRounds(a,b,scheduledRounds){
  const fighters=[a,b],attrs=new Map(fighters.map(f=>[f.id,ensureFighterAttributes(f)]));
  const val=(f,key,fallback=65)=>Number(attrs.get(f.id)?.[key])||fallback;
  const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
  const scores={[a.id]:0,[b.id]:0},damage={[a.id]:0,[b.id]:0},stamina={[a.id]:100,[b.id]:100};
  const rounds=[],actionEvents=[],maxRounds=clamp(Number(scheduledRounds)||3,1,5);
+ const rules=mmaRulesForPromotion(a.promotion||b.promotion),judges=[{a:0,b:0},{a:0,b:0},{a:0,b:0}];
  let seq=0,position='standing',top=null;
  const emit=(round,clock,actor,target,phase,type,outcome,text,importance=.5,extra={})=>{
   actionEvents.push({id:++seq,round,clock,actor:actor?.id||null,target:target?.id||null,phase,type,outcome,text,importance,position,...extra});
@@ -130,7 +183,7 @@ function simulateFightRounds(a,b,scheduledRounds){
  const other=f=>f===a?b:a;
  for(let round=1;round<=maxRounds;round++){
   position='standing';top=null;
-  const impact={[a.id]:0,[b.id]:0},control={[a.id]:0,[b.id]:0},strikes={[a.id]:0,[b.id]:0};
+  const impact={[a.id]:0,[b.id]:0},control={[a.id]:0,[b.id]:0},strikes={[a.id]:0,[b.id]:0},submissionThreat={[a.id]:0,[b.id]:0},dominance={[a.id]:0,[b.id]:0};
   emit(round,300,null,null,'round','start','', 'Round '+round+' begins.',.9);
   let finish=null,clock=300;
   for(let beat=0;beat<28;beat++){
@@ -146,10 +199,10 @@ function simulateFightRounds(a,b,scheduledRounds){
      position='standing';top=null;continue;
     }
     if(Math.random()<.25){
-     control[top.id]+=4;
+     control[top.id]+=4;dominance[top.id]+=4;
      emit(round,clock,top,defender,'ground','transition','success',top.name+' improves position and maintains top control.',.6);
     }else if(Math.random()<clamp(.11+(val(top,'submissions')-val(defender,'submissionDefense'))/280,.04,.27)){
-     spend(3);control[top.id]+=3;
+     spend(3);control[top.id]+=3;submissionThreat[top.id]+=5;
      emit(round,clock,top,defender,'submission','attempt','threat',top.name+' locks up a submission attempt. '+defender.name+' fights to defend.',.85);
      const success=Math.random()<clamp(.035+(val(top,'submissions')-val(defender,'submissionDefense'))/230+(100-stamina[defender.id])/650,.008,.23);
      if(success){
@@ -168,7 +221,7 @@ function simulateFightRounds(a,b,scheduledRounds){
     if(Math.random()<.28){emit(round,clock,actor,target,'clinch','break','success',actor.name+' breaks free of the clinch.',.4);position='standing';continue}
     spend(3);
     const success=Math.random()<clamp(.28+(val(actor,'takedowns')-val(target,'takedownDefense'))/180,.08,.65);
-    if(success){position='ground';top=actor;control[actor.id]+=6;emit(round,clock,actor,target,'wrestling','takedown','success',actor.name+' completes a takedown and settles into top control.',.83)}
+    if(success){position='ground';top=actor;control[actor.id]+=6;dominance[actor.id]+=3;emit(round,clock,actor,target,'wrestling','takedown','success',actor.name+' completes a takedown and settles into top control.',.83)}
     else{control[actor.id]+=1;emit(round,clock,actor,target,'clinch','knee','landed',actor.name+' presses '+target.name+' against the fence and lands a knee.',.49)}
    }else{
     if(Math.random()<clamp(.06+val(actor,'takedowns')/750,.07,.19)){
@@ -193,17 +246,22 @@ function simulateFightRounds(a,b,scheduledRounds){
     finish={winner:attacker,loser:hurt,method:'TKO'};break;
    }
   }
-  const leader=impact[a.id]+control[a.id]*.45>=impact[b.id]+control[b.id]*.45?a:b,trail=other(leader);
-  const gap=Math.abs((impact[a.id]+control[a.id]*.45)-(impact[b.id]+control[b.id]*.45));
-  const dominant=gap>28&&impact[leader.id]>impact[trail.id]*1.8;
-  scores[leader.id]+=10;scores[trail.id]+=dominant?8:9;
-  rounds.push({round,winner:leader.name,score:dominant?'10-8':'10-9',damage:{...damage},stamina:{...stamina},strikes:{...strikes},control:{...control}});
+  const ledger=f=>({impact:impact[f.id],submissionThreat:submissionThreat[f.id],effectiveGrappling:submissionThreat[f.id],dominance:dominance[f.id],aggression:strikes[f.id]+submissionThreat[f.id],areaControl:control[f.id]});
+  const x=ledger(a),y=ledger(b),roundCards=[mmaJudgeRound(x,y,-.65),mmaJudgeRound(x,y,0),mmaJudgeRound(x,y,.65)];
+  roundCards.forEach((card,i)=>{judges[i].a+=card[0];judges[i].b+=card[1]});
+  const leader=roundCards.filter(c=>c[0]>c[1]).length>=2?a:b;
+  scores[a.id]=judges[0].a;scores[b.id]=judges[0].b;
+  rounds.push({round,winner:leader.name,score:roundCards[0].join('-'),judgeScores:roundCards,damage:{...damage},stamina:{...stamina},strikes:{...strikes},control:{...control},effectLedger:{[a.id]:x,[b.id]:y}});
   if(finish)return {...finish,finishRound:round,rounds,scores,damage,stamina,actionEvents};
   emit(round,0,null,null,'round','end','', 'The horn sounds to end round '+round+'.',.9);
  }
- const winner=scores[a.id]===scores[b.id]?(Math.random()<.5?a:b):(scores[a.id]>scores[b.id]?a:b);
- emit(maxRounds,0,null,null,'decision','result','', 'The judges award the decision to '+winner.name+'.',1);
- return {winner,loser:other(winner),method:'Decision',finishRound:maxRounds,rounds,scores,damage,stamina,actionEvents};
+ const cards=judges.map(j=>({a:j.a,b:j.b})),decision=mmaResolveScorecards(cards);
+ // Existing career result processing requires a winner; tied cards are settled by
+ // simulated commission tie-break pending full draw-aware career bookkeeping.
+ const winner=decision.winner==='A'?a:decision.winner==='B'?b:(damage[a.id]<=damage[b.id]?a:b);
+ const method=decision.winner?decision.method:'Decision';
+ emit(maxRounds,0,null,null,'decision','result','', 'The judges announce '+(decision.winner?decision.method:'a drawn scorecard')+'. '+winner.name+' is recorded as the winner.',1);
+ return {winner,loser:other(winner),method,officialDecision:decision.method,judgeCards:cards,finishRound:maxRounds,rounds,scores,damage,stamina,actionEvents,rulesetId:rules.id};
 }
 
 function buildFightActionStream(a,b,fight){
@@ -211,7 +269,7 @@ function buildFightActionStream(a,b,fight){
  let id=0;
  const add=(round,clock,actor,target,phase,type,outcome,text,importance=.45,position='standing')=>events.push({id:++id,round,clock,actor:actor?.id||null,target:target?.id||null,phase,type,outcome,importance,position,text});
  for(const r of fight.rounds){
-  const win=r.winner===a.name?a:b,lose=win===a?b:a,finished=fight.method!=='Decision'&&fight.finishRound===r.round;
+  const win=r.winner===a.name?a:b,lose=win===a?b:a,finished=!fight.method.includes('Decision')&&fight.finishRound===r.round;
   const beats=finished?7:10;
   let phase='standing',position='standing',control=null;
   add(r.round,300,null,null,'round','start','', 'Round '+r.round+' begins. The fighters meet in the centre.',.9);
@@ -258,7 +316,7 @@ function buildFightActionStream(a,b,fight){
    }
   }else add(r.round,0,null,null,'round','end','', 'The horn sounds to end round '+r.round+'.',.9);
  }
- if(fight.method==='Decision')add(fight.finishRound,0,null,null,'decision','result','', 'The judges have their decision: '+fight.winner.name+' defeats '+fight.loser.name+'.',1);
+ if(fight.method.includes('Decision'))add(fight.finishRound,0,null,null,'decision','result','', 'The judges have their decision: '+fight.winner.name+' defeats '+fight.loser.name+'.',1);
  return events;
 }
 
@@ -293,7 +351,7 @@ function runEvent(mode='instant',preparedFight=null){
  if(!e.started){if(!e.bouts.length)return alert('Add at least one fight before starting the event.');e.started=true;e.nextFightIndex=e.bouts.length-1;e.results=[];e.pursesPaid=0;e.finishers=[];e.bestFightScore=-1;save();render();return}
  if(!['instant','commentary'].includes(mode))return alert('3D simulation is not available yet.');
  const b=e.bouts[e.nextFightIndex];if(!b)return;
- const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return alert('Missing fighter in card.');const fight=preparedFight||simulateFightRounds(a,c,b.rounds);const w=fight.winner,l=fight.loser,method=fight.method;const damage=Math.min(100,fight.damage[l.id]);const winDamage=Math.min(100,fight.damage[w.id]);b.roundResults=fight.rounds;b.actionEvents=mode==='commentary'?(fight.actionEvents||buildFightActionStream(a,c,fight)):[];b.scorecards=fight.scores;b.finishRound=fight.finishRound;b.simulationMode=mode;b.commentary=b.actionEvents.length?b.actionEvents.map(x=>'R'+x.round+' '+Math.floor(x.clock/60)+':'+String(x.clock%60).padStart(2,'0')+' '+x.text):[];recordRankingResult(w,l,method,false);w.wins++;l.losses++;const winGrowth=updateFighterDevelopment(w,true,method,winDamage,l),lossGrowth=updateFighterDevelopment(l,false,method,damage,w);b.damage=damage;b.potentialChanges={[w.id]:winGrowth,[l.id]:lossGrowth};w.popularity=Math.min(99,w.popularity+rand(2,6));b.result=w.name+' defeats '+l.name+' by '+method+' (round '+fight.finishRound+(method==='Decision'?', '+fight.scores[w.id]+'-'+fight.scores[l.id]:'')+'; damage '+damage+'/100; potential '+(winGrowth>=0?'+':'')+winGrowth+' / '+lossGrowth+')';e.results.push(b.result);const score=a.skill+c.skill+rand(0,35);if(score>(e.bestFightScore??-1)){e.bestFightScore=score;e.bestFight=a.name+' vs '+c.name}if(method!=='Decision'){e.finishers=e.finishers||[];e.finishers.push(w.name)}for(const f of [a,c]){const contract=state.contracts.find(x=>x.id===f.id);if(contract){e.pursesPaid=(e.pursesPaid||0)+contract.show+(f===w?contract.win:0);contract.fights=Math.max(0,contract.fights-1)}f.unavailableUntil=addDays(state.date,method==='Decision'?21:35)}
+ const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return alert('Missing fighter in card.');const fight=preparedFight||simulateFightRounds(a,c,b.rounds);const w=fight.winner,l=fight.loser,method=fight.method;const damage=Math.min(100,fight.damage[l.id]);const winDamage=Math.min(100,fight.damage[w.id]);b.roundResults=fight.rounds;b.actionEvents=mode==='commentary'?(fight.actionEvents||buildFightActionStream(a,c,fight)):[];b.scorecards=fight.judgeCards||fight.scores;b.rulesetId=fight.rulesetId||mmaRulesForPromotion(a.promotion).id;b.finishRound=fight.finishRound;b.simulationMode=mode;b.commentary=b.actionEvents.length?b.actionEvents.map(x=>'R'+x.round+' '+Math.floor(x.clock/60)+':'+String(x.clock%60).padStart(2,'0')+' '+x.text):[];recordRankingResult(w,l,method,false);w.wins++;l.losses++;const winGrowth=updateFighterDevelopment(w,true,method,winDamage,l),lossGrowth=updateFighterDevelopment(l,false,method,damage,w);b.damage=damage;b.potentialChanges={[w.id]:winGrowth,[l.id]:lossGrowth};w.popularity=Math.min(99,w.popularity+rand(2,6));b.result=w.name+' defeats '+l.name+' by '+method+' (round '+fight.finishRound+(method.includes('Decision')?', '+fight.scores[w.id]+'-'+fight.scores[l.id]:'')+'; damage '+damage+'/100; potential '+(winGrowth>=0?'+':'')+winGrowth+' / '+lossGrowth+')';e.results.push(b.result);const score=a.skill+c.skill+rand(0,35);if(score>(e.bestFightScore??-1)){e.bestFightScore=score;e.bestFight=a.name+' vs '+c.name}if(method!=='Decision'){e.finishers=e.finishers||[];e.finishers.push(w.name)}for(const f of [a,c]){const contract=state.contracts.find(x=>x.id===f.id);if(contract){e.pursesPaid=(e.pursesPaid||0)+contract.show+(f===w?contract.win:0);contract.fights=Math.max(0,contract.fights-1)}f.unavailableUntil=addDays(state.date,method.includes('Decision')?21:35)}
  e.nextFightIndex--;
  if(e.nextFightIndex<0){
  const p=forecast(e);
