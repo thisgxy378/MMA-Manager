@@ -118,39 +118,92 @@ function fightFinishMethod(winner,loser){
  return roll<ko?'TKO':roll<ko+sub?'Submission':'Decision';
 }
 function simulateFightRounds(a,b,scheduledRounds){
- const rounds=[],scores={[a.id]:0,[b.id]:0},damage={[a.id]:0,[b.id]:0};
- const stamina={[a.id]:100,[b.id]:100},maxRounds=Math.max(1,Math.min(5,Number(scheduledRounds)||3));
+ const fighters=[a,b],attrs=new Map(fighters.map(f=>[f.id,ensureFighterAttributes(f)]));
+ const val=(f,key,fallback=65)=>Number(attrs.get(f.id)?.[key])||fallback;
+ const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+ const scores={[a.id]:0,[b.id]:0},damage={[a.id]:0,[b.id]:0},stamina={[a.id]:100,[b.id]:100};
+ const rounds=[],actionEvents=[],maxRounds=clamp(Number(scheduledRounds)||3,1,5);
+ let seq=0,position='standing',top=null;
+ const emit=(round,clock,actor,target,phase,type,outcome,text,importance=.5,extra={})=>{
+  actionEvents.push({id:++seq,round,clock,actor:actor?.id||null,target:target?.id||null,phase,type,outcome,text,importance,position,...extra});
+ };
+ const other=f=>f===a?b:a;
  for(let round=1;round<=maxRounds;round++){
-  const aa=ensureFighterAttributes(a),bb=ensureFighterAttributes(b);
-  const effective=(f,opp)=>matchupRating(f,opp)+(stamina[f.id]-stamina[opp.id])*.17-(damage[f.id]-damage[opp.id])*.13;
-  const edge=effective(a,b)-effective(b,a)+rand(-22,22);
-  const roundWinner=edge>=0?a:b,roundLoser=roundWinner===a?b:a;
-  const aw=ensureFighterAttributes(roundWinner),al=ensureFighterAttributes(roundLoser);
-  const activity=Math.max(4,Math.round(10+(aw.pace-65)*.13+rand(-3,6)));
-  const roundDamage=Math.max(3,Math.round(activity*(.55+aw.punchPower/180)+rand(-3,4)));
-  damage[roundLoser.id]+=roundDamage;
-  damage[roundWinner.id]+=Math.max(1,Math.round(roundDamage*.35));
-  const margin=Math.abs(edge),dominant=margin>30&&roundDamage>=17;
-  scores[roundWinner.id]+=10;scores[roundLoser.id]+=dominant?8:9;
-  stamina[a.id]=Math.max(5,stamina[a.id]-Math.max(5,Math.round(10+(100-aa.stamina)*.13+(100-aa.endurance)*.08+rand(-3,4))));
-  stamina[b.id]=Math.max(5,stamina[b.id]-Math.max(5,Math.round(10+(100-bb.stamina)*.13+(100-bb.endurance)*.08+rand(-3,4))));
-  const roundInfo={round,winner:roundWinner.name,score:dominant?'10-8':'10-9',damage:{[a.id]:damage[a.id],[b.id]:damage[b.id]},stamina:{[a.id]:stamina[a.id],[b.id]:stamina[b.id]}};
-  rounds.push(roundInfo);
-  // Finishes become more likely as accumulated damage and fatigue rise.
-  const koAttack=aw.punchPower*.42+aw.kickPower*.28+aw.accuracy*.2+aw.aggression*.1;
-  const koDefense=al.chin*.55+al.blocking*.25+al.headMovement*.2;
-  const subAttack=aw.submissions*.5+aw.groundControl*.22+aw.takedowns*.18+aw.fightIQ*.1;
-  const subDefense=al.submissionDefense*.5+al.groundEscapes*.3+al.takedownDefense*.2;
-  const koChance=Math.max(.005,Math.min(.24,.025+(koAttack-koDefense)*.0015+damage[roundLoser.id]*.0007));
-  const subChance=Math.max(.003,Math.min(.16,.012+(subAttack-subDefense)*.0015+(100-stamina[roundLoser.id])*.0003));
-  const roll=Math.random();
-  if(roll<koChance+subChance){
-   const method=roll<koChance?'TKO':'Submission';
-   return {winner:roundWinner,loser:roundLoser,method,finishRound:round,rounds,scores,damage,stamina};
+  position='standing';top=null;
+  const impact={[a.id]:0,[b.id]:0},control={[a.id]:0,[b.id]:0},strikes={[a.id]:0,[b.id]:0};
+  emit(round,300,null,null,'round','start','', 'Round '+round+' begins.',.9);
+  let finish=null,clock=300;
+  for(let beat=0;beat<28;beat++){
+   clock=Math.max(8,300-Math.round((beat+1)*290/29));
+   const initiative=f=>val(f,'pace')*.18+val(f,'fightIQ')*.12+val(f,'aggression')*.12+stamina[f.id]*.18+Math.random()*50;
+   const actor=initiative(a)>=initiative(b)?a:b,target=other(actor);
+   const tired=1-stamina[actor.id]/180;
+   const spend=n=>{stamina[actor.id]=clamp(stamina[actor.id]-n*tired,4,100)};
+   if(position==='ground'){
+    const defender=other(top);
+    if(Math.random()<clamp(.1+(val(defender,'groundEscapes')-val(top,'groundControl'))/240,.05,.4)){
+     emit(round,clock,defender,top,'ground','escape','success',defender.name+' scrambles back to the feet.',.65);
+     position='standing';top=null;continue;
+    }
+    if(Math.random()<.25){
+     control[top.id]+=4;
+     emit(round,clock,top,defender,'ground','transition','success',top.name+' improves position and maintains top control.',.6);
+    }else if(Math.random()<clamp(.11+(val(top,'submissions')-val(defender,'submissionDefense'))/280,.04,.27)){
+     spend(3);control[top.id]+=3;
+     emit(round,clock,top,defender,'submission','attempt','threat',top.name+' locks up a submission attempt. '+defender.name+' fights to defend.',.85);
+     const success=Math.random()<clamp(.035+(val(top,'submissions')-val(defender,'submissionDefense'))/230+(100-stamina[defender.id])/650,.008,.23);
+     if(success){
+      emit(round,clock-2,top,defender,'finish','submission','tap',defender.name+' taps! '+top.name+' wins by submission.',1);
+      finish={winner:top,loser:defender,method:'Submission'};break;
+     }
+     emit(round,clock-3,defender,top,'submission','defense','success',defender.name+' escapes the submission danger.',.65);
+    }else{
+     const hit=Math.random()<clamp(.45+(val(top,'groundControl')-val(defender,'blocking'))/240,.25,.8);
+     spend(2);
+     if(hit){const d=clamp(1+val(top,'punchPower')/42+Math.random()*2,1,6);damage[defender.id]+=d;impact[top.id]+=d;strikes[top.id]++;
+      emit(round,clock,top,defender,'ground','ground_strike','landed',top.name+' lands short ground strikes from top position.',.62);
+     }else emit(round,clock,top,defender,'ground','ground_strike','blocked',defender.name+' covers up and blocks the ground strikes.',.35);
+    }
+   }else if(position==='clinch'){
+    if(Math.random()<.28){emit(round,clock,actor,target,'clinch','break','success',actor.name+' breaks free of the clinch.',.4);position='standing';continue}
+    spend(3);
+    const success=Math.random()<clamp(.28+(val(actor,'takedowns')-val(target,'takedownDefense'))/180,.08,.65);
+    if(success){position='ground';top=actor;control[actor.id]+=6;emit(round,clock,actor,target,'wrestling','takedown','success',actor.name+' completes a takedown and settles into top control.',.83)}
+    else{control[actor.id]+=1;emit(round,clock,actor,target,'clinch','knee','landed',actor.name+' presses '+target.name+' against the fence and lands a knee.',.49)}
+   }else{
+    if(Math.random()<clamp(.06+val(actor,'takedowns')/750,.07,.19)){
+     position='clinch';emit(round,clock,actor,target,'clinch','entry','success',actor.name+' closes distance and initiates a clinch.',.5);continue;
+    }
+    const technique=['jab','cross','hook','uppercut','low kick','body kick'][Math.floor(Math.random()*6)];
+    const accuracy=clamp(.37+(val(actor,'accuracy')-val(target,'headMovement'))/240+(stamina[actor.id]-stamina[target.id])/480,.18,.78);
+    const landed=Math.random()<accuracy;spend(technique.includes('kick')?4:2.5);
+    if(landed){
+     const power=technique.includes('kick')?val(actor,'kickPower'):val(actor,'punchPower');
+     const d=clamp(1+power/35+Math.random()*3,1,8);
+     damage[target.id]+=d;impact[actor.id]+=d;strikes[actor.id]++;
+     emit(round,clock,actor,target,'striking',technique,'landed',actor.name+' lands a '+technique+' on '+target.name+'.',d>5?.72:.49);
+     if(d>5&&Math.random()<.22)emit(round,clock-1,target,actor,'reaction','stagger','success',target.name+' is briefly shaken by the shot.',.83);
+    }else emit(round,clock,actor,target,'striking',technique,'defended',actor.name+' throws a '+technique+', but '+target.name+' defends.',.32);
+   }
+   const hurt=other(actor);
+   if(damage[hurt.id]>18&&Math.random()<clamp((damage[hurt.id]-18)/650+(100-stamina[hurt.id])/1400,.001,.13)){
+    const attacker=other(hurt);
+    emit(round,clock-2,attacker,hurt,'striking','knockdown','success',attacker.name+' lands a powerful follow-up! '+hurt.name+' goes down!',.98);
+    emit(round,clock-4,attacker,hurt,'finish','TKO','stoppage','The referee steps in! '+attacker.name+' wins by TKO.',1);
+    finish={winner:attacker,loser:hurt,method:'TKO'};break;
+   }
   }
+  const leader=impact[a.id]+control[a.id]*.45>=impact[b.id]+control[b.id]*.45?a:b,trail=other(leader);
+  const gap=Math.abs((impact[a.id]+control[a.id]*.45)-(impact[b.id]+control[b.id]*.45));
+  const dominant=gap>28&&impact[leader.id]>impact[trail.id]*1.8;
+  scores[leader.id]+=10;scores[trail.id]+=dominant?8:9;
+  rounds.push({round,winner:leader.name,score:dominant?'10-8':'10-9',damage:{...damage},stamina:{...stamina},strikes:{...strikes},control:{...control}});
+  if(finish)return {...finish,finishRound:round,rounds,scores,damage,stamina,actionEvents};
+  emit(round,0,null,null,'round','end','', 'The horn sounds to end round '+round+'.',.9);
  }
  const winner=scores[a.id]===scores[b.id]?(Math.random()<.5?a:b):(scores[a.id]>scores[b.id]?a:b);
- return {winner,loser:winner===a?b:a,method:'Decision',finishRound:maxRounds,rounds,scores,damage,stamina};
+ emit(maxRounds,0,null,null,'decision','result','', 'The judges award the decision to '+winner.name+'.',1);
+ return {winner,loser:other(winner),method:'Decision',finishRound:maxRounds,rounds,scores,damage,stamina,actionEvents};
 }
 
 function buildFightActionStream(a,b,fight){
@@ -215,7 +268,7 @@ function startLiveCommentary(){
  const b=e.bouts[e.nextFightIndex];if(!b)return;
  const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return;
  const fight=simulateFightRounds(a,c,b.rounds);
- const actions=buildFightActionStream(a,c,fight);fight.actionEvents=actions;
+ const actions=fight.actionEvents||buildFightActionStream(a,c,fight);fight.actionEvents=actions;
  const lines=actions.filter(x=>x.importance>=.28).map(x=>({round:x.round,clock:x.clock,text:x.text,importance:x.importance}));
  const overlay=document.createElement('div');overlay.id='liveCommentaryOverlay';
  overlay.style.cssText='position:fixed;inset:0;z-index:10000;background:#090e17;overflow:auto;padding:24px;box-sizing:border-box;color:#f0f4fa';
