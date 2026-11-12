@@ -200,20 +200,59 @@ function rankingRecord(f,amateur=false){
 }
 function rankingScore(f,amateur=false){
  const key=amateur?'amateurElo':'resultElo';
- if(Number.isFinite(f[key]))return f[key];
- // Legacy careers have no opponent-by-opponent history. Seed using records only.
  const r=rankingRecord(f,amateur);
- return 1000+Math.min(25,r.wins)*9-Math.min(25,r.losses)*11+
- (r.total?((r.wins/r.total)-.5)*100:0);
+ const base=Number.isFinite(f[key])?f[key]:1000+Math.min(25,r.wins)*9-Math.min(25,r.losses)*11+(r.total?((r.wins/r.total)-.5)*100:0);
+ const history=(amateur?f.amateurRankingHistory:f.rankingHistory)||[];
+ // Recent form is based exclusively on the last five actual fight results.
+ const recent=history.slice(-5).reduce((total,h,i)=>total+(h.win?1:-1)*(i+1)*1.6,0);
+ const last=amateur?f.lastAmateurFightDate:f.lastRankingFightDate;
+ const idleDays=last&&state.date?Math.max(0,(Date.parse(state.date)-Date.parse(last))/86400000):0;
+ // No inactivity penalty until 12 months; gradual penalty thereafter, capped at 24 months.
+ const inactivity=Math.min(45,Math.max(0,idleDays-365)/30*3);
+ return base+recent-inactivity;
+}
+function rankingPositions(promotion,gender,division){
+ const amateur=promotion==='Streetbeefs';
+ return state.fighters.filter(f=>(f.gender||'Male')===gender&&(promotion==='Worldwide'?f.status!=='Amateur':f.promotion===promotion&&(amateur?f.status==='Amateur':f.status!=='Amateur'))&&(division==='Pound for Pound'||f.division===division))
+ .sort((a,b)=>rankingScore(b,amateur)-rankingScore(a,amateur)||rankingRecord(b,amateur).wins-rankingRecord(a,amateur).wins||a.name.localeCompare(b.name))
+ .slice(0,15).map(f=>f.id);
+}
+function rankingSnapshot(){
+ const positions={};
+ for(const p of ['Worldwide',...Object.keys(PROMOS),...REGION,'Free Agent']){
+  for(const gender of ['Male','Female']){
+   const divisions=gender==='Male'?MALE_DIVISIONS:FEMALE_DIVISIONS;
+   for(const division of ['Pound for Pound',...divisions]){
+    positions[[p,gender,division].join('|')]=rankingPositions(p,gender,division);
+   }
+  }
+ }
+ return positions;
 }
 function recordRankingResult(winner,loser,method,amateur=false){
+ const before=rankingSnapshot();
  const key=amateur?'amateurElo':'resultElo';
- const wa=rankingScore(winner,amateur),la=rankingScore(loser,amateur);
- const expected=1/(1+Math.pow(10,(la-wa)/400));
- const finish=method==='KO'||method==='TKO'||method==='Submission';
- const change=(finish?35:32)*(1-expected);
- winner[key]=wa+change;
- loser[key]=la-change;
+ // Base Elo (not recent-form or inactivity-adjusted score) determines expected outcome.
+ const base=f=>Number.isFinite(f[key])?f[key]:(()=>{const r=rankingRecord(f,amateur);return 1000+Math.min(25,r.wins)*9-Math.min(25,r.losses)*11+(r.total?((r.wins/r.total)-.5)*100:0)})();
+ const wa=base(winner),la=base(loser),expected=1/(1+Math.pow(10,(la-wa)/400));
+ const finish=['KO','TKO','Submission'].includes(method),change=(finish?35:32)*(1-expected);
+ winner[key]=wa+change;loser[key]=la-change;
+ const histKey=amateur?'amateurRankingHistory':'rankingHistory';
+ const dateKey=amateur?'lastAmateurFightDate':'lastRankingFightDate';
+ for(const [f,win] of [[winner,true],[loser,false]]){
+  if(!Array.isArray(f[histKey]))f[histKey]=[];
+  f[histKey].push({date:state.date,win,method,opponentId:win?loser.id:winner.id});
+  if(f[histKey].length>20)f[histKey]=f[histKey].slice(-20);
+  f[dateKey]=state.date;
+ }
+ const after=rankingSnapshot();
+ state.rankMovement=state.rankMovement||{};
+ for(const k of Object.keys(after)){
+  const previous=before[k],current=after[k];
+  const movement={};
+  current.forEach((id,i)=>{const old=previous.indexOf(id);movement[id]=old<0?'new':old-i});
+  state.rankMovement[k]=movement;
+ }
 }
 function rankingsView(){
  const promotions=['Worldwide',...Object.keys(PROMOS),...REGION,'Free Agent'];
@@ -224,12 +263,14 @@ function rankingsView(){
  const pool=state.fighters.filter(f=>(f.gender||'Male')===gender&&(promotion==='Worldwide'||f.promotion===promotion)&&
  (promotion==='Streetbeefs'?f.status==='Amateur':f.status!=='Amateur'));
  const eligible=pool.filter(f=>division==='Pound for Pound'||f.division===division);
- const ranked=eligible.slice().sort((a,b)=>rankingScore(b,promotion==='Streetbeefs')-rankingScore(a,promotion==='Streetbeefs')||(rankingRecord(b,promotion==='Streetbeefs').wins-rankingRecord(a,promotion==='Streetbeefs').wins)||a.name.localeCompare(b.name)).slice(0,15);
+ const ids=rankingPositions(promotion,gender,division);
+ const ranked=ids.map(id=>eligible.find(f=>f.id===id)).filter(Boolean);
+ const moves=(state.rankMovement||{})[[promotion,gender,division].join('|')]||{};
  const options=(values,current)=>values.map(v=>'<option value="'+esc(v)+'" '+(v===current?'selected':'')+'>'+esc(v)+'</option>').join('');
- return '<section class="panel"><h2>'+esc(promotion)+' · '+esc(gender)+' · '+esc(division)+'</h2><p class="sub">Live top 15 rankings, ordered by hidden Elo-style ratings that update after each fight, taking opponent strength, upsets and finishes into account. Pound for pound compares fighters across weight classes. Worldwide combines promotions; amateurs are excluded except in Streetbeefs.</p>'+
+ return '<section class="panel"><h2>'+esc(promotion)+' · '+esc(gender)+' · '+esc(division)+'</h2><p class="sub">Live top 15 rankings, ordered by hidden Elo-style ratings that update after each fight, taking opponent strength, upsets, finishes, recent form and inactivity into account. Pound for pound compares fighters across weight classes. Worldwide combines promotions; amateurs are excluded except in Streetbeefs.</p>'+
  '<div class="event-fields"><label>Promotion<select id="rankPromotion">'+options(promotions,promotion)+'</select></label><label>Gender<select id="rankGender">'+options(['Male','Female'],gender)+'</select></label><label>Ranking<select id="rankDivision">'+options(['Pound for Pound',...classes],division)+'</select></label></div>'+
  (ranked.length?'<div style="overflow-x:auto"><table><thead><tr><th>Rank</th><th>Fighter</th><th>Division</th><th>Promotion</th><th>Record</th><th>Win %</th></tr></thead><tbody>'+
- ranked.map((f,i)=>'<tr><td><strong>#'+(i+1)+'</strong></td><td>'+esc(f.name)+'</td><td>'+esc(f.division)+'</td><td>'+esc(f.promotion)+'</td><td>'+(promotion==='Streetbeefs'?(f.amateurWins||0)+'-'+(f.amateurLosses||0):(f.wins||0)+'-'+(f.losses||0))+'</td><td>'+(rankingRecord(f,promotion==='Streetbeefs').total?Math.round(100*rankingRecord(f,promotion==='Streetbeefs').wins/rankingRecord(f,promotion==='Streetbeefs').total)+'%':'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="notice">No eligible fighters in this ranking yet.</div>')+
+ ranked.map((f,i)=>'<tr><td><strong>#'+(i+1)+'</strong> '+(moves[f.id]==='new'?'<span class="good">NEW</span>':moves[f.id]>0?'<span class="good">↑'+moves[f.id]+'</span>':moves[f.id]<0?'<span class="bad">↓'+Math.abs(moves[f.id])+'</span>':'<span class="muted">—</span>')+'</td><td>'+esc(f.name)+'</td><td>'+esc(f.division)+'</td><td>'+esc(f.promotion)+'</td><td>'+(promotion==='Streetbeefs'?(f.amateurWins||0)+'-'+(f.amateurLosses||0):(f.wins||0)+'-'+(f.losses||0))+'</td><td>'+(rankingRecord(f,promotion==='Streetbeefs').total?Math.round(100*rankingRecord(f,promotion==='Streetbeefs').wins/rankingRecord(f,promotion==='Streetbeefs').total)+'%':'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="notice">No eligible fighters in this ranking yet.</div>')+
  '<p class="muted">Rankings are in-game estimates, not official real-world MMA rankings. Divisions with fewer than 15 eligible fighters display everyone available.</p></section>';
 }
 function world(){return `<div class="grid"><section class="panel"><h2>Major promotions</h2>${Object.entries(PROMOS).map(([k,v])=>`<div class="feed row"><div><strong>${k}</strong><div class="muted">${v.desc}</div></div><span class="pill">${k===state.player?'Player':'AI controlled'}</span></div>`).join('')}</section><section class="panel"><h2>Regional development circuit</h2>${REGION.map(r=>`<div class="feed row"><strong>${r}</strong><span class="pill">${state.fighters.filter(f=>f.promotion===r).length} fighters</span></div>`).join('')}</section></div><section class="panel" style="margin-top:16px"><h2>World results</h2>${state.aiResults.length?state.aiResults.slice(0,14).map(r=>`<div class="feed">${esc(r)}</div>`).join(''):'<div class="empty">Advance time to generate regional results.</div>'}</section>`}
