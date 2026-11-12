@@ -152,21 +152,71 @@ function simulateFightRounds(a,b,scheduledRounds){
  const winner=scores[a.id]===scores[b.id]?(Math.random()<.5?a:b):(scores[a.id]>scores[b.id]?a:b);
  return {winner,loser:winner===a?b:a,method:'Decision',finishRound:maxRounds,rounds,scores,damage,stamina};
 }
+
+function buildFightActionStream(a,b,fight){
+ const events=[],pick=xs=>xs[Math.floor(Math.random()*xs.length)],attrs=f=>ensureFighterAttributes(f);
+ let id=0;
+ const add=(round,clock,actor,target,phase,type,outcome,text,importance=.45,position='standing')=>events.push({id:++id,round,clock,actor:actor?.id||null,target:target?.id||null,phase,type,outcome,importance,position,text});
+ for(const r of fight.rounds){
+  const win=r.winner===a.name?a:b,lose=win===a?b:a,finished=fight.method!=='Decision'&&fight.finishRound===r.round;
+  const beats=finished?7:10;
+  let phase='standing',position='standing',control=null;
+  add(r.round,300,null,null,'round','start','', 'Round '+r.round+' begins. The fighters meet in the centre.',.9);
+  for(let i=0;i<beats;i++){
+   const clock=Math.max(finished?25:8,Math.round(286-i*(finished?32:27)+Math.random()*9));
+   const actor=Math.random()<.64?win:lose,target=actor===a?b:a,att=attrs(actor),def=attrs(target);
+   if(phase==='ground'){
+    const escape=Math.random()*100<Math.max(20,def.groundEscapes*.55);
+    if(escape){add(r.round,clock,target,actor,'ground','standup','success',target.name+' creates space and works back to the feet.',.6);phase='standing';position='standing';control=null;continue}
+    if(Math.random()<.22){position=pick(['half guard','side control','mount']);add(r.round,clock,control||actor,target,'ground','transition','success',(control||actor).name+' advances into '+position+'.',.67,position);continue}
+    const top=control||actor,bot=top===a?b:a;
+    if(Math.random()*100<attrs(top).submissions*.23){add(r.round,clock,top,bot,'ground','submission_attempt','defended',top.name+' threatens a choke, but '+bot.name+' fights the hands and stays safe.',.79,position)}
+    else add(r.round,clock,top,bot,'ground','ground_strike','landed',pick([top.name+' lands short punches from '+position+'.',top.name+' creates room and drops an elbow from the top.']),.58,position);
+    continue;
+   }
+   if(phase==='clinch'){
+    if(Math.random()<.35){add(r.round,clock,actor,target,'clinch','break','success',actor.name+' turns off the fence and the fighters separate.',.4);phase='standing';continue}
+    const success=Math.random()*100<(att.takedowns*.53+att.wrestling*.2-def.takedownDefense*.34);
+    if(success){phase='ground';control=actor;position=pick(['closed guard','half guard']);add(r.round,clock,actor,target,'wrestling','takedown','success',actor.name+' changes levels and finishes the takedown into '+position+'.',.78,position)}
+    else add(r.round,clock,actor,target,'clinch','knee','landed',actor.name+' digs a knee into the body as they battle for position against the fence.',.48);
+    continue;
+   }
+   const wrestling=Math.random()*100<(att.takedowns*.12+att.clinch*.07);
+   if(wrestling){phase='clinch';add(r.round,clock,actor,target,'clinch','entry','success',actor.name+' closes the distance and ties up '+target.name+' against the fence.',.53);continue}
+   if(Math.random()<.13){add(r.round,clock,actor,target,'movement','reset','',pick([actor.name+' circles outside, looking for an opening.', 'Both fighters feint at range before resetting.']),.24);continue}
+   const technique=pick(['jab','right hand','left hook','low kick','body kick','two-punch combination','uppercut']);
+   const landed=Math.random()*100<Math.max(25,Math.min(82,40+att.accuracy*.3-def.headMovement*.22));
+   const heavy=landed&&Math.random()*100<Math.max(7,att.punchPower*.17);
+   const result=landed?(heavy?'heavy':'clean'):'defended';
+   const text=landed?pick([actor.name+' lands a '+technique+' as '+target.name+' steps into range.',actor.name+' finds the target with a '+technique+'.']):pick([actor.name+' throws a '+technique+', but '+target.name+' moves clear.',target.name+' reads the '+technique+' and blocks it.']);
+   add(r.round,clock,actor,target,'striking',technique,result,text,heavy?.76:landed?.48:.3);
+   if(heavy&&Math.random()<.28)add(r.round,clock-2,actor,target,'reaction','stagger','success',target.name+' is briefly shaken and backs away as '+actor.name+' advances.',.84);
+  }
+  if(finished){
+   const clock=Math.round(25+Math.random()*65);
+   if(fight.method==='Submission'){
+    add(r.round,clock+18,win,lose,'wrestling','takedown','success',win.name+' forces the action to the mat and establishes top control.',.86,'ground');
+    add(r.round,clock+9,win,lose,'submission','setup','success',win.name+' isolates the neck and begins tightening a choke.',.93,'ground');
+    add(r.round,clock,win,lose,'finish','submission','tap',lose.name+' tries to free the grip, but there is no escape. The tap comes! '+win.name+' wins by submission.',1,'ground');
+   }else{
+    add(r.round,clock+12,win,lose,'striking','power shot','heavy',win.name+' connects with a huge shot! '+lose.name+' stumbles backwards.',.94);
+    add(r.round,clock+5,win,lose,'striking','followup','knockdown',win.name+' surges forward with follow-up punches as '+lose.name+' drops to the canvas!',.97);
+    add(r.round,clock,win,lose,'finish','TKO','stoppage','The referee waves it off! '+win.name+' wins by TKO!',1);
+   }
+  }else add(r.round,0,null,null,'round','end','', 'The horn sounds to end round '+r.round+'.',.9);
+ }
+ if(fight.method==='Decision')add(fight.finishRound,0,null,null,'decision','result','', 'The judges have their decision: '+fight.winner.name+' defeats '+fight.loser.name+'.',1);
+ return events;
+}
+
 let liveCommentaryTimer=null;
 function startLiveCommentary(){
  const e=eventSelected();if(!e||!e.started||e.done)return;
  const b=e.bouts[e.nextFightIndex];if(!b)return;
  const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return;
  const fight=simulateFightRounds(a,c,b.rounds);
- const lines=[{round:0,text:'The fighters are ready. '+a.name+' faces '+c.name+'.'}];
- for(const r of fight.rounds){
-  lines.push({round:r.round,text:'Round '+r.round+' begins. Both fighters look to establish their range.'});
-  lines.push({round:r.round,text:r.winner+' takes control of the exchanges and lands the cleaner offense.'});
-  lines.push({round:r.round,text:'End of round '+r.round+'. Judges score it '+r.score+' for '+r.winner+'.'});
-  lines.push({round:r.round,text:a.name+' stamina: '+r.stamina[a.id]+'% · '+c.name+' stamina: '+r.stamina[c.id]+'%.'});
- }
- lines.push({round:fight.finishRound,text:fight.method==='Decision'?'The final bell sounds. The judges prepare their decision.':'The referee stops the fight! '+fight.method+' in round '+fight.finishRound+'.'});
- lines.push({round:fight.finishRound,text:'Official result: '+fight.winner.name+' defeats '+fight.loser.name+' by '+fight.method+'.'});
+ const actions=buildFightActionStream(a,c,fight);
+ const lines=actions.filter(x=>x.importance>=.28).map(x=>({round:x.round,clock:x.clock,text:x.text,importance:x.importance}));
  const overlay=document.createElement('div');overlay.id='liveCommentaryOverlay';
  overlay.style.cssText='position:fixed;inset:0;z-index:10000;background:#090e17;overflow:auto;padding:24px;box-sizing:border-box;color:#f0f4fa';
  overlay.innerHTML='<div style="max-width:850px;margin:auto"><h2>Live Fight Commentary</h2><h3>'+esc(a.name)+' vs '+esc(c.name)+'</h3><div class="row"><strong id="liveRound">Pre-fight</strong><span id="liveProgress">0 / '+lines.length+'</span></div><div id="liveFeed" aria-live="polite" style="background:#151d29;border:1px solid #334155;border-radius:12px;padding:18px;min-height:260px;max-height:55vh;overflow:auto;margin:16px 0"></div><div class="actions"><button id="livePause">Pause</button><label>Playback speed <select id="liveSpeed"><option value="2500">Slow</option><option value="1400" selected>Normal</option><option value="550">Fast</option></select></label><button id="liveNext">Next moment</button><button id="liveSkip">Skip to result</button><button class="primary" id="liveFinish" disabled>Continue event</button></div><p class="muted">Fight outcomes are finalized only when you continue. The event remains paused while you watch.</p></div>';
@@ -175,7 +225,7 @@ function startLiveCommentary(){
  const feed=overlay.querySelector('#liveFeed'),pause=overlay.querySelector('#livePause'),finish=overlay.querySelector('#liveFinish');
  const clear=()=>{if(liveCommentaryTimer){clearTimeout(liveCommentaryTimer);liveCommentaryTimer=null}};
  const step=()=>{if(index>=lines.length){clear();finish.disabled=false;pause.disabled=true;overlay.querySelector('#liveNext').disabled=true;overlay.querySelector('#liveSkip').disabled=true;return}
- const line=lines[index++],item=document.createElement('div');item.className='feed';item.textContent=line.text;feed.appendChild(item);feed.scrollTop=feed.scrollHeight;overlay.querySelector('#liveRound').textContent=line.round?'Round '+line.round:'Pre-fight';overlay.querySelector('#liveProgress').textContent=index+' / '+lines.length;if(index===lines.length){step();return}};
+ const line=lines[index++],item=document.createElement('div');item.className='feed';item.textContent=line.text;feed.appendChild(item);feed.scrollTop=feed.scrollHeight;overlay.querySelector('#liveRound').textContent='Round '+line.round+' · '+Math.floor(line.clock/60)+':'+String(line.clock%60).padStart(2,'0')+' remaining';overlay.querySelector('#liveProgress').textContent=index+' / '+lines.length;if(index===lines.length){step();return}};
  const schedule=()=>{clear();if(!paused&&index<lines.length)liveCommentaryTimer=setTimeout(()=>{step();schedule()},Number(overlay.querySelector('#liveSpeed').value))};
  pause.onclick=()=>{paused=!paused;pause.textContent=paused?'Resume':'Pause';schedule()};
  overlay.querySelector('#liveSpeed').onchange=schedule;
@@ -190,7 +240,7 @@ function runEvent(mode='instant',preparedFight=null){
  if(!e.started){if(!e.bouts.length)return alert('Add at least one fight before starting the event.');e.started=true;e.nextFightIndex=e.bouts.length-1;e.results=[];e.pursesPaid=0;e.finishers=[];e.bestFightScore=-1;save();render();return}
  if(!['instant','commentary'].includes(mode))return alert('3D simulation is not available yet.');
  const b=e.bouts[e.nextFightIndex];if(!b)return;
- const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return alert('Missing fighter in card.');const fight=preparedFight||simulateFightRounds(a,c,b.rounds);const w=fight.winner,l=fight.loser,method=fight.method;const damage=Math.min(100,fight.damage[l.id]);const winDamage=Math.min(100,fight.damage[w.id]);b.roundResults=fight.rounds;b.scorecards=fight.scores;b.finishRound=fight.finishRound;b.simulationMode=mode;b.commentary=fight.rounds.map(r=>'Round '+r.round+': '+r.winner+' wins '+r.score+'. '+a.name+' stamina '+r.stamina[a.id]+'%, '+c.name+' stamina '+r.stamina[c.id]+'%.');recordRankingResult(w,l,method,false);w.wins++;l.losses++;const winGrowth=updateFighterDevelopment(w,true,method,winDamage,l),lossGrowth=updateFighterDevelopment(l,false,method,damage,w);b.damage=damage;b.potentialChanges={[w.id]:winGrowth,[l.id]:lossGrowth};w.popularity=Math.min(99,w.popularity+rand(2,6));b.result=w.name+' defeats '+l.name+' by '+method+' (round '+fight.finishRound+(method==='Decision'?', '+fight.scores[w.id]+'-'+fight.scores[l.id]:'')+'; damage '+damage+'/100; potential '+(winGrowth>=0?'+':'')+winGrowth+' / '+lossGrowth+')';e.results.push(b.result);const score=a.skill+c.skill+rand(0,35);if(score>(e.bestFightScore??-1)){e.bestFightScore=score;e.bestFight=a.name+' vs '+c.name}if(method!=='Decision'){e.finishers=e.finishers||[];e.finishers.push(w.name)}for(const f of [a,c]){const contract=state.contracts.find(x=>x.id===f.id);if(contract){e.pursesPaid=(e.pursesPaid||0)+contract.show+(f===w?contract.win:0);contract.fights=Math.max(0,contract.fights-1)}f.unavailableUntil=addDays(state.date,method==='Decision'?21:35)}
+ const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return alert('Missing fighter in card.');const fight=preparedFight||simulateFightRounds(a,c,b.rounds);const w=fight.winner,l=fight.loser,method=fight.method;const damage=Math.min(100,fight.damage[l.id]);const winDamage=Math.min(100,fight.damage[w.id]);b.roundResults=fight.rounds;b.actionEvents=mode==='commentary'?buildFightActionStream(a,c,fight):[];b.scorecards=fight.scores;b.finishRound=fight.finishRound;b.simulationMode=mode;b.commentary=b.actionEvents.length?b.actionEvents.map(x=>'R'+x.round+' '+Math.floor(x.clock/60)+':'+String(x.clock%60).padStart(2,'0')+' '+x.text):[];recordRankingResult(w,l,method,false);w.wins++;l.losses++;const winGrowth=updateFighterDevelopment(w,true,method,winDamage,l),lossGrowth=updateFighterDevelopment(l,false,method,damage,w);b.damage=damage;b.potentialChanges={[w.id]:winGrowth,[l.id]:lossGrowth};w.popularity=Math.min(99,w.popularity+rand(2,6));b.result=w.name+' defeats '+l.name+' by '+method+' (round '+fight.finishRound+(method==='Decision'?', '+fight.scores[w.id]+'-'+fight.scores[l.id]:'')+'; damage '+damage+'/100; potential '+(winGrowth>=0?'+':'')+winGrowth+' / '+lossGrowth+')';e.results.push(b.result);const score=a.skill+c.skill+rand(0,35);if(score>(e.bestFightScore??-1)){e.bestFightScore=score;e.bestFight=a.name+' vs '+c.name}if(method!=='Decision'){e.finishers=e.finishers||[];e.finishers.push(w.name)}for(const f of [a,c]){const contract=state.contracts.find(x=>x.id===f.id);if(contract){e.pursesPaid=(e.pursesPaid||0)+contract.show+(f===w?contract.win:0);contract.fights=Math.max(0,contract.fights-1)}f.unavailableUntil=addDays(state.date,method==='Decision'?21:35)}
  e.nextFightIndex--;
  if(e.nextFightIndex<0){
  const p=forecast(e);
