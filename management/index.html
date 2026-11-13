@@ -224,7 +224,7 @@ function fighterCardRanking(f){
  const promotion=f.promotion,gender=f.gender||'Male',division=f.division;
  const ranks=rankingPositions(promotion,gender,division);
  const pos=ranks.indexOf(f.id);
- return pos<0?'Unranked':'#'+(pos+1);
+ return pos<0?'NR':'#'+(pos+1);
 }
 function roster(){let arr=state.fighters.filter(f=>f.promotion===state.player);
  const division=state.rosterDivision||'All',gender=state.rosterGender||'All',sort=state.rosterSort||'division',direction=state.rosterDirection||'desc',query=(state.rosterSearch||'').trim().toLowerCase();
