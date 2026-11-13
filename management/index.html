@@ -5,6 +5,11 @@
 .fighter-generated-avatar{display:block;width:100%;height:100%;min-height:140px;object-fit:cover}.roster-card-portrait .roster-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;z-index:2}.roster-card-portrait .fighter-generated-avatar{position:relative;z-index:0}
 .fighter-attribute-group>summary::-webkit-details-marker{display:none}.fighter-attribute-group>summary::marker{content:''}.roster-inline-bio{grid-column:1/-1;width:100%;box-sizing:border-box;margin:0;min-width:0}.roster-player-card[aria-expanded="true"]{border-color:var(--accent)}.roster-card-portrait .roster-photo{object-position:center center}
 .roster-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0 6px}.roster-filters label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);min-width:0}.roster-filters input,.roster-filters select{width:100%;min-width:0;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--txt);font:inherit;font-size:13px}.roster-result-count{margin:8px 0 4px}@media(max-width:760px){.roster-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:420px){.roster-filters{grid-template-columns:1fr}}
+
+/* Consistent Title Case for interface controls and headings; preserve prose, fighter names, and data. */
+h1,h2,h3,h4,.nav,.pill,.roster-card-cta,.roster-card-ranking,.roster-card-stats small,.roster-filters label,.event-fields label,.negotiation-fields label,summary,th,option,select,button:not(.roster-player-card):not(.promo),.card>.muted,.panel>strong,.feed>.muted{ text-transform:capitalize; }
+input::placeholder,textarea::placeholder{ text-transform:capitalize; }
+.roster-card-name,.roster-card-country,.roster-card-age,.roster-card-portrait,.roster-card-details strong{ text-transform:none; }
 </style></head><body><div id="root"></div><script>
 const PROMOS={UFC:{budget:18000000,prestige:96,desc:'Global leader · high expectations'},PFL:{budget:8000000,prestige:75,desc:'International challenger · build momentum'},ONE:{budget:10500000,prestige:82,desc:'Asian powerhouse · develop regional stars'},RIZIN:{budget:6500000,prestige:77,desc:'Japanese powerhouse · distinctive events'}};
 const REGION=['Eternal MMA','Streetbeefs','Cage Warriors','LFA','OKTAGON MMA','KSW','BRAVE CF'];
