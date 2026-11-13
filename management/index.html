@@ -221,6 +221,11 @@ function initializeChampionships(){
   const key=championshipKey(c.promotion,c.gender,c.division);
   if(!state.championships[key])state.championships[key]={promotion:c.promotion,gender:c.gender,division:c.division,championId:c.name?(state.fighters.find(f=>f.name===c.name)?.id||null):null,championName:c.name,interimChampionId:null,defenses:0,status:c.name?'active':'vacant',sourceDate:'2026-11-11',source:'https://fighthub-app.com/en/champions/'};
  }
+ const interim=[['PFL','Male','Middleweight','Johnny Eblen'],['KSW','Male','Heavyweight','Štefan Vojčák'],['KSW','Male','Middleweight','Piotr Kuberski']];
+ for(const [p,g,d,name] of interim){
+  const t=state.championships[championshipKey(p,g,d)];
+  if(t){t.interimChampionName=name;t.interimChampionId=state.fighters.find(f=>f.name===name)?.id||null}
+ }
  state.championshipSnapshotVersion='2026-11-11-v1';
 }
 function championshipBoard(){
