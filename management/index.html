@@ -280,18 +280,47 @@ function gymWeeklyDevelopment(f){
   const group=groups[Math.floor(Math.random()*groups.length)],key=group[1][Math.floor(Math.random()*group[1].length)];
   if(Math.random()<gym[group[0]]/110&&a[key]<Math.min(99,Number(f.potential)||85)){a[key]++;syncFighterAbility(f)}
  }
- // Gym switches are rare, and loyalty + tenure substantially reduce their probability.
- if(f.gymTenureWeeks<52||f.unavailableUntil&&f.unavailableUntil>state.date)return;
- const poorForm=(f.potentialHistory||[]).slice(-4).filter(x=>x.won===false).length>=3;
- const monthlyChance=(.0015+(poorForm?.003:0))*(1-f.gymLoyalty/115);
- if(Math.random()>=monthlyChance)return;
- const candidates=MMA_GYMS.filter(g=>g.id!==gym.id&&g.id!=='regional'&&g.reputation>=gym.reputation-5);
- if(!candidates.length)return;
- const next=candidates[Math.floor(Math.random()*candidates.length)];
- f.gymHistory.push({date:state.date,from:gym.name,to:next.name,loyalty:f.gymLoyalty});
- f.gymId=next.id;f.gymTenureWeeks=0;f.gymLoyalty=Math.max(15,Math.round(f.gymLoyalty*.6));
- if(typeof tendencyCareerTransition==='function')tendencyCareerTransition(f,'style-change',next.style,52);
- if(state.news&&f.promotion===state.player)log(f.name+' changes gym from '+gym.name+' to '+next.name+'.');
+
+}
+
+function fighterHasBooking(f){return state.events.some(e=>!e.done&&(e.aid===f.id||e.bid===f.id||(e.bouts||[]).some(b=>b.aid===f.id||b.bid===f.id)))}
+function fighterCareerAI(f){
+ if(f.status==='Retired'||f.promotion==='Retired')return;
+ const gym=ensureFighterGym(f);
+ if(!f.careerAI)f.careerAI={decisions:[]};
+ const ai=f.careerAI,age=Number(f.age)||28,history=f.potentialHistory||[],recent=history.slice(-5);
+ const losses=recent.filter(x=>x.won===false).length,damage=Number(f.careerDamage)||0;
+ const traits=f.hiddenPersonality||f.personality||{};
+ const resilience=Number(traits.resilience)||50,adaptability=Number(traits.adaptability)||50;
+ const remember=(type,detail)=>{ai.lastDecision=state.date;ai.decisions.push({date:state.date,type,detail});if(ai.decisions.length>20)ai.decisions.shift();if(f.promotion===state.player||type==='retirement')log(f.name+': '+detail)};
+ if(!ai.lastReview){ai.lastReview=state.date;return}
+ if((Date.parse(state.date)-Date.parse(ai.lastReview))/86400000<84)return;
+ ai.lastReview=state.date;
+ if(fighterHasBooking(f))return;
+ const retirementRisk=Math.max(0,age-35)*.014+Math.max(0,damage-100)*.0006+(age>=34&&losses>=3?.025:0)-Math.max(0,resilience-50)*.0003;
+ if(age>=35&&Math.random()<Math.min(.25,Math.max(0,retirementRisk))){
+  const former=f.promotion;f.promotion='Retired';f.status='Retired';f.retirementDate=state.date;
+  state.contracts=state.contracts.filter(c=>c.id!==f.id);
+  remember('retirement','retires from professional MMA ('+former+').');return;
+ }
+ if(f.status==='Professional'&&losses>=3&&Math.random()<.035+adaptability/3000){
+  const ds=divisionSteps(f),idx=ds.indexOf(f.division);
+  const options=[ds[idx-1],ds[idx+1]].filter(Boolean);
+  if(options.length){const old=f.division;f.division=options[Math.floor(Math.random()*options.length)];remember('division','moves from '+old+' to '+f.division+' after reassessing their career.');return}
+ }
+ const poorFit=losses>=3||age<=30&&f.gymTenureWeeks>=104&&gym.reputation<65;
+ const loyalty=Number(f.gymLoyalty)||50;
+ const switchChance=(poorFit?.11:.018)*(1-loyalty/120)*(adaptability/65);
+ if(f.gymTenureWeeks>=52&&Math.random()<switchChance){
+  const candidates=MMA_GYMS.filter(g=>g.id!==gym.id&&g.id!=='regional'&&g.reputation>=gym.reputation-5);
+  if(candidates.length){
+   const next=candidates.sort((a,b)=>(b.reputation+Math.random()*12)-(a.reputation+Math.random()*12))[0];
+   f.gymHistory.push({date:state.date,from:gym.name,to:next.name,loyalty});
+   f.gymId=next.id;f.gymTenureWeeks=0;f.gymLoyalty=Math.max(15,Math.round(loyalty*.6));
+   tendencyCareerTransition(f,'style-change',next.style,52);
+   remember('gym','moves from '+gym.name+' to '+next.name+'.');return;
+  }
+ }
 }
 function gymStyleLabel(style){return ({striker:'Striking',boxer:'Boxing',kickboxer:'Kickboxing',wrestler:'Wrestling',grappler:'Grappling',submission:'Submission Grappling',sambo:'Sambo Wrestling'})[String(style||'').toLowerCase()]||String(style||'').replace(/^./,c=>c.toUpperCase())}
 function gymsView(){
@@ -618,7 +647,7 @@ function bind(){const titlePromotion=$('titlePromotion');if(titlePromotion)title
 function advance(days=1){if(state.events.some(e=>!e.done&&eventDate(e)<=state.date)){tab='Events';render();return}for(let day=0;day<days;day++){state.date=addDays(state.date,1);let d=currentDate();state.year=d.getUTCFullYear();state.week=now();const monday=d.getUTCDay()===1;if(monday){let roster=state.fighters.filter(f=>f.promotion===state.player);state.cash-=15000+roster.length*1500;if(state.week%4===0){state.scoutTokens+=8;log('Scouting team replenished eight detailed reports.')}}
 if(d.getUTCMonth()===0&&d.getUTCDate()===1)state.fighters.forEach(f=>{f.age=(Number(f.age)||25)+1});
 if(d.getUTCDay()===1)weeklyWorldTick(true);if(state.events.some(e=>!e.done&&eventDate(e)===state.date)){tab='Events';break}}save();render()}
-function weeklyWorldTick(monday){if(monday)state.fighters.forEach(recoverFighterDevelopment);if(monday&&state.week%2===0){let groups=REGION.filter(r=>state.fighters.filter(f=>f.promotion===r).length>=2);if(groups.length){let region=groups[rand(0,groups.length-1)],pool=state.fighters.filter(f=>f.promotion===region);let a=pool[rand(0,pool.length-1)],b=pool.filter(f=>f.id!==a.id&&f.status===a.status&&sameFightDivision(f,a)).sort((x,y)=>Math.abs(x.skill-a.skill)-Math.abs(y.skill-a.skill))[0];if(b){let w=Math.random()<Math.max(.08,Math.min(.92,.5+(matchupRating(a,b)-matchupRating(b,a))/110))?a:b,l=w===a?b:a;recordRankingResult(w,l,'Decision',region==='Streetbeefs');if(region==='Streetbeefs'){w.amateurWins++;l.amateurLosses++}else{w.wins++;l.losses++}if(Math.random()<.3){const a=ensureFighterAttributes(w);const k=FIGHTER_ATTRIBUTES[rand(0,FIGHTER_ATTRIBUTES.length-1)][0];a[k]=Math.min(99,a[k]+5);syncFighterAbility(w)}updateFighterDevelopment(w,true,'Decision',rand(5,25),l);updateFighterDevelopment(l,false,'Decision',rand(10,35),w);let result=`${region}: ${w.name} def. ${l.name} (${region==='Streetbeefs'?`${w.amateurWins}-${w.amateurLosses} AM`:`${w.wins}-${w.losses} PRO`})`;state.aiResults.unshift(result);log(result)}}}
+function weeklyWorldTick(monday){if(monday)state.fighters.forEach(f=>{if(f.status!=='Retired'){recoverFighterDevelopment(f);fighterCareerAI(f)}});if(monday&&state.week%2===0){let groups=REGION.filter(r=>state.fighters.filter(f=>f.promotion===r).length>=2);if(groups.length){let region=groups[rand(0,groups.length-1)],pool=state.fighters.filter(f=>f.promotion===region);let a=pool[rand(0,pool.length-1)],b=pool.filter(f=>f.id!==a.id&&f.status===a.status&&sameFightDivision(f,a)).sort((x,y)=>Math.abs(x.skill-a.skill)-Math.abs(y.skill-a.skill))[0];if(b){let w=Math.random()<Math.max(.08,Math.min(.92,.5+(matchupRating(a,b)-matchupRating(b,a))/110))?a:b,l=w===a?b:a;recordRankingResult(w,l,'Decision',region==='Streetbeefs');if(region==='Streetbeefs'){w.amateurWins++;l.amateurLosses++}else{w.wins++;l.losses++}if(Math.random()<.3){const a=ensureFighterAttributes(w);const k=FIGHTER_ATTRIBUTES[rand(0,FIGHTER_ATTRIBUTES.length-1)][0];a[k]=Math.min(99,a[k]+5);syncFighterAbility(w)}updateFighterDevelopment(w,true,'Decision',rand(5,25),l);updateFighterDevelopment(l,false,'Decision',rand(10,35),w);let result=`${region}: ${w.name} def. ${l.name} (${region==='Streetbeefs'?`${w.amateurWins}-${w.amateurLosses} AM`:`${w.wins}-${w.losses} PRO`})`;state.aiResults.unshift(result);log(result)}}}
 if(monday&&state.week%6===0){let pool=state.fighters.filter(f=>REGION.includes(f.promotion));if(pool.length){let f=pool[rand(0,pool.length-1)],rivals=Object.keys(PROMOS).filter(p=>p!==state.player);let destination=rivals[rand(0,rivals.length-1)],old=f.promotion;if(f.status==='Amateur'){f.status='Professional';log(`${f.name} turns professional after ${f.amateurWins}-${f.amateurLosses} amateur bouts.`)}f.promotion=destination;log(`${destination} signs ${f.name} from ${old}.`)}}
 for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let f=state.fighters.find(x=>x.id===c.id);if(f&&f.promotion===state.player){f.promotion='Free Agent';log(`${f.name}'s contract expires. Fighter enters free agency.`)}state.contracts=state.contracts.filter(x=>x!==c)}}}
 
