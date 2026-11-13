@@ -157,76 +157,87 @@ function matchupRating(f,opponent){
 }
 function potentialRange(f){const p=Math.max(25,Math.min(99,Number(f.potential)||50));return Math.max(20,p-6)+'–'+Math.min(99,p+6)}
 
-const CAREER_TENDENCY_VERSION='career-tendencies-v1';
+const CAREER_TENDENCY_VERSION='career-tendencies-v2';
 const CAREER_TENDENCY_PHYSICAL=['pressure','volume','kicking','takedownDrive','groundAndPound','scrambling'];
-const CAREER_TENDENCY_TECHNICAL=['counterstriking','submissionHunting','clinchPreference','finishingInstinct','defensiveMovement','riskTaking'];
+const CAREER_TENDENCY_STYLE={
+ striker:{pressure:2,volume:2,kicking:1,takedownDrive:-2},
+ boxer:{volume:2,counterstriking:2,kicking:-2,takedownDrive:-1},
+ kickboxer:{kicking:3,counterstriking:1,takedownDrive:-2},
+ wrestler:{takedownDrive:3,clinchPreference:2,groundAndPound:2,kicking:-2},
+ grappler:{takedownDrive:2,submissionHunting:3,clinchPreference:2},
+ submission:{submissionHunting:3,scrambling:2,groundAndPound:-1},
+ sambo:{takedownDrive:3,submissionHunting:2,groundAndPound:2}
+};
 function careerTendencyClamp(v){return Math.max(5,Math.min(99,Math.round(v)))}
 function careerTendencyBaseline(f){
  const t=ensureFighterTendencies(f);
  if(!f.careerTendencyBaseline)f.careerTendencyBaseline=Object.fromEntries(REAL_FIGHT_BEHAVIOUR_KEYS.map(k=>[k,Number(t[k])||50]));
  if(!Array.isArray(f.tendencyHistory))f.tendencyHistory=[];
+ if(!f.tendencyCareer||f.tendencyCareer.version!==CAREER_TENDENCY_VERSION){
+  f.tendencyCareer={version:CAREER_TENDENCY_VERSION,style:String(f.fightingStyle||'striker').toLowerCase(),styleWeeks:0,styleFights:0,styleEvidence:{},careerFights:0,lossStreak:0,transition:null,lastChangeDate:state?.date||null};
+ }
  return t;
 }
+function tendencyRecordChange(f,changes,type){
+ if(!Object.keys(changes).length)return;
+ f.tendencyHistory.push({date:state?.date||null,type,changes});
+ if(f.tendencyHistory.length>40)f.tendencyHistory.shift();
+ f.tendencyCareer.lastChangeDate=state?.date||null;
+}
+function tendencyCareerTransition(f,type,focus,requiredWeeks=26){
+ careerTendencyBaseline(f);
+ const c=f.tendencyCareer;
+ if(c.transition?.type===type&&c.transition?.focus===focus)return;
+ c.transition={type,focus,weeks:0,requiredWeeks};
+}
 function developFighterTendencies(f,context={}){
- const t=careerTendencyBaseline(f),age=Number(f.age)||28,changes={};
- const history=f.potentialHistory||[],recent=history.slice(-5);
- const last=recent[recent.length-1],wins=recent.filter(x=>x.won===true).length,losses=recent.filter(x=>x.won===false).length;
- const win=!!context.won,method=String(context.method||'');
- const opponent=context.opponent,opponentSkill=Number(opponent?.skill)||Number(f.skill)||60;
- const upset=opponentSkill>(Number(f.skill)||60)+8;
- const shifts={
-  pressure:win?1:losses>=2?-1:0,
-  volume:win?1:0,
-  counterstriking:win&&method==='Decision'?2:losses>=2?1:0,
-  kicking:0,
-  takedownDrive:win&&method==='Submission'?2:0,
-  submissionHunting:win&&method==='Submission'?3:0,
-  groundAndPound:win&&method==='TKO'?2:0,
-  clinchPreference:0,
-  riskTaking:win&&upset?1:losses>=2?-2:0,
-  finishingInstinct:win&&method!=='Decision'?2:0,
-  defensiveMovement:!win?2:1,
-  scrambling:win&&method==='Submission'?1:0
- };
- // A result provides limited evidence of style; gradual random development represents camp and tactical work.
- const keys=REAL_FIGHT_BEHAVIOUR_KEYS;
- const focus=keys[(Number(f.id)+history.length*7+Math.max(0,Number(f.age)||0))%keys.length];
- shifts[focus]=(shifts[focus]||0)+(age<=29?2:1);
- const n=age<=27?3:age<=33?2:1;
- for(const k of keys){
-  let delta=shifts[k]||0;
-  if(k===focus)delta=Math.min(n,delta);
-  if(age>=34&&CAREER_TENDENCY_PHYSICAL.includes(k)&&Math.random()<.24)delta-=1;
-  if(age>=30&&['counterstriking','defensiveMovement','clinchPreference'].includes(k)&&Math.random()<.24)delta+=1;
-  if(!delta)continue;
-  const old=Number(t[k])||50,baseline=Number(f.careerTendencyBaseline[k])||old;
-  // Soft limits prevent every fighter converging on the same extreme profile.
-  const pull=Math.abs(old-baseline)>=24&&Math.sign(delta)===Math.sign(old-baseline)?0.5:1;
-  const next=careerTendencyClamp(old+delta*pull);
-  if(next!==old){t[k]=next;changes[k]=next-old}
- }
- if(Object.keys(changes).length){
-  f.tendencyHistory.push({date:state?.date||null,type:'fight',result:win?'Win':'Loss',method,changes});
-  if(f.tendencyHistory.length>40)f.tendencyHistory.shift();
- }
- return changes;
+ careerTendencyBaseline(f);
+ const c=f.tendencyCareer,win=!!context.won,method=String(context.method||'');
+ c.careerFights++;
+ c.styleFights++;
+ c.lossStreak=win?0:c.lossStreak+1;
+ // Fight results are evidence of sustained strategic habits, not instant tendency bonuses.
+ const evidence=c.styleEvidence;
+ const signal=win?(method==='Submission'?'submissionHunting':method==='TKO'?'finishingInstinct':'defensiveMovement'):'defensiveMovement';
+ evidence[signal]=(Number(evidence[signal])||0)+1;
+ if(c.lossStreak>=3&&!c.transition)tendencyCareerTransition(f,'career-reassessment','defensiveMovement',30);
+ if(c.careerFights>=12&&Number(f.age)>=34&&!c.transition)tendencyCareerTransition(f,'veteran-adaptation','counterstriking',52);
+ return {};
 }
 function weeklyTendencyDevelopment(f){
- const t=careerTendencyBaseline(f),age=Number(f.age)||28;
+ careerTendencyBaseline(f);
+ const c=f.tendencyCareer,t=f.hiddenTendencies;
  if(f.unavailableUntil&&f.unavailableUntil>state.date)return;
- // Roughly one focused tactical change every 4-8 months; development remains slow.
- const chance=age<=26?.055:age<=32?.035:age<=36?.025:.015;
- if(Math.random()>=chance)return;
- const keys=REAL_FIGHT_BEHAVIOUR_KEYS;
- const focus=keys[Math.floor(Math.random()*keys.length)];
- let delta=1;
- if(age>=34&&CAREER_TENDENCY_PHYSICAL.includes(focus))delta=-1;
- const old=Number(t[focus])||50,base=Number(f.careerTendencyBaseline[focus])||old;
- if(Math.abs(old-base)>25&&Math.sign(delta)===Math.sign(old-base))return;
- const next=careerTendencyClamp(old+delta);
- if(next!==old){t[focus]=next;f.tendencyHistory.push({date:state.date,type:'training',changes:{[focus]:next-old}});if(f.tendencyHistory.length>40)f.tendencyHistory.shift()}
+ const style=String(f.fightingStyle||'striker').toLowerCase();
+ if(c.style!==style){
+  c.style=style;c.styleWeeks=0;c.styleFights=0;c.styleEvidence={};
+  tendencyCareerTransition(f,'style-change',style,26);
+ }
+ c.styleWeeks++;
+ if(!c.transition)return;
+ const transition=c.transition;
+ transition.weeks++;
+ // A new style needs at least six months; age/career adaptations take longer.
+ if(transition.weeks<transition.requiredWeeks)return;
+ if(transition.type==='style-change'&&c.styleFights<2&&transition.weeks<78)return;
+ const plan=transition.type==='style-change'?(CAREER_TENDENCY_STYLE[transition.focus]||{}):
+  transition.type==='career-reassessment'?{defensiveMovement:3,counterstriking:2,riskTaking:-2,pressure:-1}:
+  {counterstriking:2,defensiveMovement:2,pressure:-2,volume:-1};
+ const changes={};
+ for(const [key,direction]of Object.entries(plan)){
+  const old=Number(t[key])||50;
+  const baseline=Number(f.careerTendencyBaseline[key])||old;
+  if(Math.abs(old-baseline)>=30&&Math.sign(direction)===Math.sign(old-baseline))continue;
+  const next=careerTendencyClamp(old+Math.sign(direction)*Math.min(2,Math.abs(direction)));
+  if(next!==old){t[key]=next;changes[key]=next-old}
+ }
+ tendencyRecordChange(f,changes,transition.type);
+ // Further changes require another sustained block of training/experience.
+ transition.weeks=0;
+ transition.requiredWeeks=transition.type==='style-change'?39:52;
+ if(transition.type==='career-reassessment'&&c.lossStreak===0)c.transition=null;
+ if(transition.type==='veteran-adaptation'&&Number(f.age)<34)c.transition=null;
 }
-
 function updateFighterDevelopment(f,won,method,damage=0,opponent=null){
  const old=f.potential,skill=Number(f.skill)||50,oppSkill=Number(opponent?.skill)||skill;
  const youth=f.age<=25?1:f.age>=34?-1:0;
