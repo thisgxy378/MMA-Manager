@@ -156,6 +156,77 @@ function matchupRating(f,opponent){
  return combatRating(f)+(offense-defense)*.18+(ground-resistance)*.16+(conditioning-70)*.05;
 }
 function potentialRange(f){const p=Math.max(25,Math.min(99,Number(f.potential)||50));return Math.max(20,p-6)+'–'+Math.min(99,p+6)}
+
+const CAREER_TENDENCY_VERSION='career-tendencies-v1';
+const CAREER_TENDENCY_PHYSICAL=['pressure','volume','kicking','takedownDrive','groundAndPound','scrambling'];
+const CAREER_TENDENCY_TECHNICAL=['counterstriking','submissionHunting','clinchPreference','finishingInstinct','defensiveMovement','riskTaking'];
+function careerTendencyClamp(v){return Math.max(5,Math.min(99,Math.round(v)))}
+function careerTendencyBaseline(f){
+ const t=ensureFighterTendencies(f);
+ if(!f.careerTendencyBaseline)f.careerTendencyBaseline=Object.fromEntries(REAL_FIGHT_BEHAVIOUR_KEYS.map(k=>[k,Number(t[k])||50]));
+ if(!Array.isArray(f.tendencyHistory))f.tendencyHistory=[];
+ return t;
+}
+function developFighterTendencies(f,context={}){
+ const t=careerTendencyBaseline(f),age=Number(f.age)||28,changes={};
+ const history=f.potentialHistory||[],recent=history.slice(-5);
+ const last=recent[recent.length-1],wins=recent.filter(x=>x.won===true).length,losses=recent.filter(x=>x.won===false).length;
+ const win=!!context.won,method=String(context.method||'');
+ const opponent=context.opponent,opponentSkill=Number(opponent?.skill)||Number(f.skill)||60;
+ const upset=opponentSkill>(Number(f.skill)||60)+8;
+ const shifts={
+  pressure:win?1:losses>=2?-1:0,
+  volume:win?1:0,
+  counterstriking:win&&method==='Decision'?2:losses>=2?1:0,
+  kicking:0,
+  takedownDrive:win&&method==='Submission'?2:0,
+  submissionHunting:win&&method==='Submission'?3:0,
+  groundAndPound:win&&method==='TKO'?2:0,
+  clinchPreference:0,
+  riskTaking:win&&upset?1:losses>=2?-2:0,
+  finishingInstinct:win&&method!=='Decision'?2:0,
+  defensiveMovement:!win?2:1,
+  scrambling:win&&method==='Submission'?1:0
+ };
+ // A result provides limited evidence of style; gradual random development represents camp and tactical work.
+ const keys=REAL_FIGHT_BEHAVIOUR_KEYS;
+ const focus=keys[(Number(f.id)+history.length*7+Math.max(0,Number(f.age)||0))%keys.length];
+ shifts[focus]=(shifts[focus]||0)+(age<=29?2:1);
+ const n=age<=27?3:age<=33?2:1;
+ for(const k of keys){
+  let delta=shifts[k]||0;
+  if(k===focus)delta=Math.min(n,delta);
+  if(age>=34&&CAREER_TENDENCY_PHYSICAL.includes(k)&&Math.random()<.24)delta-=1;
+  if(age>=30&&['counterstriking','defensiveMovement','clinchPreference'].includes(k)&&Math.random()<.24)delta+=1;
+  if(!delta)continue;
+  const old=Number(t[k])||50,baseline=Number(f.careerTendencyBaseline[k])||old;
+  // Soft limits prevent every fighter converging on the same extreme profile.
+  const pull=Math.abs(old-baseline)>=24&&Math.sign(delta)===Math.sign(old-baseline)?0.5:1;
+  const next=careerTendencyClamp(old+delta*pull);
+  if(next!==old){t[k]=next;changes[k]=next-old}
+ }
+ if(Object.keys(changes).length){
+  f.tendencyHistory.push({date:state?.date||null,type:'fight',result:win?'Win':'Loss',method,changes});
+  if(f.tendencyHistory.length>40)f.tendencyHistory.shift();
+ }
+ return changes;
+}
+function weeklyTendencyDevelopment(f){
+ const t=careerTendencyBaseline(f),age=Number(f.age)||28;
+ if(f.unavailableUntil&&f.unavailableUntil>state.date)return;
+ // Roughly one focused tactical change every 4-8 months; development remains slow.
+ const chance=age<=26?.055:age<=32?.035:age<=36?.025:.015;
+ if(Math.random()>=chance)return;
+ const keys=REAL_FIGHT_BEHAVIOUR_KEYS;
+ const focus=keys[Math.floor(Math.random()*keys.length)];
+ let delta=1;
+ if(age>=34&&CAREER_TENDENCY_PHYSICAL.includes(focus))delta=-1;
+ const old=Number(t[focus])||50,base=Number(f.careerTendencyBaseline[focus])||old;
+ if(Math.abs(old-base)>25&&Math.sign(delta)===Math.sign(old-base))return;
+ const next=careerTendencyClamp(old+delta);
+ if(next!==old){t[focus]=next;f.tendencyHistory.push({date:state.date,type:'training',changes:{[focus]:next-old}});if(f.tendencyHistory.length>40)f.tendencyHistory.shift()}
+}
+
 function updateFighterDevelopment(f,won,method,damage=0,opponent=null){
  const old=f.potential,skill=Number(f.skill)||50,oppSkill=Number(opponent?.skill)||skill;
  const youth=f.age<=25?1:f.age>=34?-1:0;
@@ -178,10 +249,12 @@ function updateFighterDevelopment(f,won,method,damage=0,opponent=null){
  f.potentialHistory=history;
  history.push({date:state.date,change:actual,won,result:(won?'Win':'Loss')+' by '+method,damage,opponent:opponent?.name||'Unknown',opponentSkill:oppSkill,careerDamage:f.careerDamage});
  if(history.length>30)history.shift();
+ developFighterTendencies(f,{won,method,opponent,damage});
  if(won&&skill<f.potential){f.skill=Math.min(95,f.potential,skill+(oppSkill>skill+8&&Math.random()<.45?2:Math.random()<.35?1:0));if(f.skill>skill){const a=ensureFighterAttributes(f);const k=FIGHTER_ATTRIBUTES[(f.potentialHistory.length+f.id)%FIGHTER_ATTRIBUTES.length][0];a[k]=Math.min(99,a[k]+(f.skill-skill)*FIGHTER_ATTRIBUTES.length);syncFighterAbility(f)}}
  return actual
 }
 function recoverFighterDevelopment(f){
+ weeklyTendencyDevelopment(f);
  const age=Number(f.age)||25,damage=Number(f.careerDamage)||0;
  const recovery=age<=25?3:age>=34?1:2;
  f.careerDamage=Math.max(0,damage-recovery);
