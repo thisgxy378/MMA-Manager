@@ -762,7 +762,7 @@ function bind(){const titlePromotion=$('titlePromotion');if(titlePromotion)title
  if(existing)existing.remove();
  grid.querySelectorAll('[data-roster-bio]').forEach(card=>card.setAttribute('aria-expanded','false'));
  const panel=document.createElement('section');panel.id='rosterBioPanel';panel.className='panel roster-inline-bio';panel.dataset.fighterId=String(id);panel.setAttribute('aria-live','polite');
- panel.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><h2>Fighter profile</h2><button type="button" id="closeRosterBio">Close</button></div>'+fighterBioHTML(id);
+ panel.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><h2>Fighter profile</h2><button type="button" id="closeRosterBio">Close</button></div>'+'<div class="roster-bio-content">'+rosterFighterBioHTML(id)+'</div>';
  // Insert after the selected card's grid row so the profile appears immediately below it.
  const cards=[...grid.querySelectorAll('.roster-player-card')],index=cards.indexOf(b);
  const columns=Math.max(1,Math.round(grid.clientWidth/(b.getBoundingClientRect().width+16)));
