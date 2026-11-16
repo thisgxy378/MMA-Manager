@@ -268,6 +268,50 @@ function ensureFighterGym(f){
  if(!Array.isArray(f.gymHistory))f.gymHistory=[];
  return MMA_GYMS.find(g=>g.id===f.gymId);
 }
+const PERSONALITY_FACTORS={
+ professionalism:[['workEthic',.40],['discipline',.35],['commitment',.25]],
+ temperament:[['emotionalControl',.40],['composure',.35],['aggression',-.25]],
+ ambition:[['careerDrive',.40],['achievementMotivation',.35],['competitiveness',.25]],
+ loyalty:[['gymAttachment',.35],['promotionLoyalty',.40],['relationshipStability',.25]],
+ adaptability:[['opennessToChange',.35],['learningAbility',.35],['tacticalFlexibility',.30]],
+ resilience:[['mentalToughness',.40],['persistence',.35],['recoveryMindset',.25]],
+ confidence:[['selfBelief',.50],['assertiveness',.30],['riskTolerance',.20]]
+};
+function ensureFighterPersonality(f){
+ if(!f.hiddenPersonalityFactors||typeof f.hiddenPersonalityFactors!=='object')f.hiddenPersonalityFactors={};
+ const factors=f.hiddenPersonalityFactors,legacy=f.hiddenPersonality||f.personality||{};
+ let hash=2166136261;for(const ch of String(f.id)+'|'+String(f.name))hash=Math.imul(hash^ch.charCodeAt(0),16777619)>>>0;
+ const seeded=(key)=>{let h=hash;for(const ch of key)h=Math.imul(h^ch.charCodeAt(0),16777619)>>>0;return 25+h%56};
+ const clamp=n=>Math.max(0,Math.min(100,Math.round(n)));
+ for(const [category,parts] of Object.entries(PERSONALITY_FACTORS)){
+  for(const [key,weight] of parts){
+   if(!Number.isFinite(Number(factors[key]))){
+    const baseline=Number(legacy[category]);
+    factors[key]=clamp(Number.isFinite(baseline)?baseline+(seeded(key)-53)*.45:seeded(key));
+   }
+  }
+ }
+ if(!Number.isFinite(Number(factors.financialMotivation)))factors.financialMotivation=seeded('financialMotivation');
+ const scores={};
+ for(const [category,parts] of Object.entries(PERSONALITY_FACTORS)){
+  scores[category]=clamp(parts.reduce((sum,[key,weight])=>sum+(weight<0?(100-factors[key])*-weight:factors[key]*weight),0));
+ }
+ f.personalityRatings=scores;
+ return scores;
+}
+function personalityDescription(category,value){
+ const n=Math.max(0,Math.min(100,Number(value)||0));
+ const labels={
+ professionalism:['Unprofessional','Inconsistent','Generally professional','Highly professional','Model professional'],
+ temperament:['Volatile','Fiery','Even-tempered','Composed','Exceptionally composed'],
+ ambition:['Unambitious','Unhurried','Career-minded','Ambitious','Relentlessly ambitious'],
+ loyalty:['Unattached','Independent','Generally loyal','Loyal','Deeply loyal'],
+ adaptability:['Resistant to change','Slow to adapt','Adaptable','Highly adaptable','Exceptionally versatile'],
+ resilience:['Easily discouraged','Sensitive to setbacks','Persistent','Mentally tough','Exceptionally resilient'],
+ confidence:['Self-doubting','Cautious','Self-assured','Confident','Supremely confident']
+ };
+ return (labels[category]||labels.confidence)[n<20?0:n<40?1:n<60?2:n<80?3:4];
+}
 function gymWeeklyDevelopment(f){
  const gym=ensureFighterGym(f),age=Number(f.age)||28;
  f.gymTenureWeeks++;
@@ -600,9 +644,9 @@ function championshipBoard(){
  const card=t=>{const f=state.fighters.find(x=>x.id===t.championId);return '<div class="feed row"><div><strong>'+esc(t.gender+' · '+t.division)+'</strong><div class="muted">'+(f?esc(f.name):t.championName?esc(t.championName):'Vacant')+'</div></div><span class="pill">'+(t.status==='vacant'?'Vacant':'Champion')+'</span></div>'};
  return '<section class="panel"><h2>Championships</h2><p class="sub">Verified MMA title snapshot: 11 November 2026. Vacant belts remain vacant. Champion ratings for newly added fighters are provisional style-based estimates.</p><label>Promotion <select id="titlePromotion">'+promos.map(x=>'<option '+(x===p?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label>'+(titles.length?titles.map(card).join(''):'<div class="notice">No reliably verified champions loaded for this regional promotion yet.</div>')+'</section>';
 }
-function initial(p){const fighters=[...names.map((_,i)=>makeFighter(i)),...REAL_FIGHTERS.map(makeRealFighter)];fighters.forEach(f=>{ensureFightingStyle(f);ensureFighterTendencies(f);applyResearchCombatAttributes(f);syncFighterAbility(f)});return{player:p,date:'2026-01-05',week:1,year:2026,cash:PROMOS[p].budget,prestige:PROMOS[p].prestige,fighters,news:[`Welcome to ${p}. Your management career begins.`,`Regional scouting network activated across seven promotions.`],events:[],contracts:[],scoutTokens:8,offers:[],history:[],aiResults:[],selectedRegion:'All',selectedDivision:'All',selectedStatus:'All'}}
+function initial(p){const fighters=[...names.map((_,i)=>makeFighter(i)),...REAL_FIGHTERS.map(makeRealFighter)];fighters.forEach(f=>{ensureFighterPersonality(f);ensureFightingStyle(f);ensureFighterTendencies(f);applyResearchCombatAttributes(f);syncFighterAbility(f)});return{player:p,date:'2026-01-05',week:1,year:2026,cash:PROMOS[p].budget,prestige:PROMOS[p].prestige,fighters,news:[`Welcome to ${p}. Your management career begins.`,`Regional scouting network activated across seven promotions.`],events:[],contracts:[],scoutTokens:8,offers:[],history:[],aiResults:[],selectedRegion:'All',selectedDivision:'All',selectedStatus:'All'}}
 let state=null,tab='Overview';try{state=JSON.parse(localStorage.getItem('mma_gm_management_v01'))}catch(e){}
-function migrate(){if(!state)return;initializeChampionships();expandUFCRoster();state.settings=state.settings||{showHiddenAttributes:false};state.fighters?.forEach(f=>{if(f.realFighter&&f.name==='Paul Browne'){f.name='Caolan Loughran';f.age=30;f.promotion=f.promotion==='Cage Warriors'?'PFL':f.promotion;f.fightingStyle='boxer';}});addRealFighters();if(!state.date){const w=Math.max(1,Number(state.week)||1),y=Number(state.year)||2026;state.date=new Date(Date.UTC(y,0,5+(w-1)*7)).toISOString().slice(0,10)}state.contracts=state.contracts||[];state.selectedNationality=state.selectedNationality||'All';state.scoutTokens=Math.max(8,Number(state.scoutTokens)||0);state.selectedStatus=state.selectedStatus||'All';state.offers=state.offers||[];state.fighters.forEach(f=>{ensureFighterGym(f);if(f.realFighter)applyRealFighterRecord(f);ensureFightingStyle(f);ensureFighterTendencies(f);applyResearchCombatAttributes(f);applyDeepResearch20261113(f);syncFighterAbility(f);if(!f.gender)f.gender=['Zhang Weili','Valentina Shevchenko','Manon Fiorot','Erin Blanchfield','Dakota Ditcheva','Larissa Pacheco','Stamp Fairtex','Denice Zamboanga','Seika Izawa'].includes(f.name)?'Female':'Male';if(f.promotion===state.player)f.scouted=Math.max(2,Number(f.scouted)||0);if(!f.nationality)f.nationality=NATIONALITIES[f.id-1]||'Unknown';if(!f.status){f.status=f.promotion==='Streetbeefs'?'Amateur':'Professional';if(f.status==='Amateur'){f.amateurWins=f.wins||0;f.amateurLosses=f.losses||0;f.wins=0;f.losses=0}}if(!Number.isFinite(f.amateurWins))f.amateurWins=0;if(!Number.isFinite(f.amateurLosses))f.amateurLosses=0;if(f.promotion==='Streetbeefs'&&f.status!=='Amateur'){f.amateurWins+=f.wins||0;f.amateurLosses+=f.losses||0;f.wins=0;f.losses=0;f.status='Amateur'}if(f.promotion===state.player&&!state.contracts.some(c=>c.id===f.id)){state.contracts.push({id:f.id,show:Math.max(8000,Math.round(f.salary/4/1000)*1000),win:Math.max(8000,Math.round(f.salary/4/1000)*1000),signing:0,fights:4,weeks:104,start:now(),origin:"Existing roster"})}});applyVerifiedUFCCareerRecords();applyNovember2026UFCRecordBatch1();applyNovember2026UFCRecordBatch2();applyNovember2026UFCRecordBatch3();applyNovember2026UFCRecordBatch4();applyNovember2026UFCRecordBatch5();applyNovember2026UFCRecordBatch6();applyNovember2026UFCRecordBatch7();applyNovember2026UFCRecordBatch8();applyNovember2026UFCRecordBatch9();applyCrossPromotionRecords20261114();applyCompleteProRecordSnapshot20261114();}migrate();
+function migrate(){if(!state)return;initializeChampionships();expandUFCRoster();state.settings=state.settings||{showHiddenAttributes:false};state.fighters?.forEach(f=>{if(f.realFighter&&f.name==='Paul Browne'){f.name='Caolan Loughran';f.age=30;f.promotion=f.promotion==='Cage Warriors'?'PFL':f.promotion;f.fightingStyle='boxer';}});addRealFighters();if(!state.date){const w=Math.max(1,Number(state.week)||1),y=Number(state.year)||2026;state.date=new Date(Date.UTC(y,0,5+(w-1)*7)).toISOString().slice(0,10)}state.contracts=state.contracts||[];state.selectedNationality=state.selectedNationality||'All';state.scoutTokens=Math.max(8,Number(state.scoutTokens)||0);state.selectedStatus=state.selectedStatus||'All';state.offers=state.offers||[];state.fighters.forEach(f=>{ensureFighterGym(f);ensureFighterPersonality(f);if(f.realFighter)applyRealFighterRecord(f);ensureFightingStyle(f);ensureFighterTendencies(f);applyResearchCombatAttributes(f);applyDeepResearch20261113(f);syncFighterAbility(f);if(!f.gender)f.gender=['Zhang Weili','Valentina Shevchenko','Manon Fiorot','Erin Blanchfield','Dakota Ditcheva','Larissa Pacheco','Stamp Fairtex','Denice Zamboanga','Seika Izawa'].includes(f.name)?'Female':'Male';if(f.promotion===state.player)f.scouted=Math.max(2,Number(f.scouted)||0);if(!f.nationality)f.nationality=NATIONALITIES[f.id-1]||'Unknown';if(!f.status){f.status=f.promotion==='Streetbeefs'?'Amateur':'Professional';if(f.status==='Amateur'){f.amateurWins=f.wins||0;f.amateurLosses=f.losses||0;f.wins=0;f.losses=0}}if(!Number.isFinite(f.amateurWins))f.amateurWins=0;if(!Number.isFinite(f.amateurLosses))f.amateurLosses=0;if(f.promotion==='Streetbeefs'&&f.status!=='Amateur'){f.amateurWins+=f.wins||0;f.amateurLosses+=f.losses||0;f.wins=0;f.losses=0;f.status='Amateur'}if(f.promotion===state.player&&!state.contracts.some(c=>c.id===f.id)){state.contracts.push({id:f.id,show:Math.max(8000,Math.round(f.salary/4/1000)*1000),win:Math.max(8000,Math.round(f.salary/4/1000)*1000),signing:0,fights:4,weeks:104,start:now(),origin:"Existing roster"})}});applyVerifiedUFCCareerRecords();applyNovember2026UFCRecordBatch1();applyNovember2026UFCRecordBatch2();applyNovember2026UFCRecordBatch3();applyNovember2026UFCRecordBatch4();applyNovember2026UFCRecordBatch5();applyNovember2026UFCRecordBatch6();applyNovember2026UFCRecordBatch7();applyNovember2026UFCRecordBatch8();applyNovember2026UFCRecordBatch9();applyCrossPromotionRecords20261114();applyCompleteProRecordSnapshot20261114();}migrate();
 function save(){try{localStorage.setItem('mma_gm_management_v01',JSON.stringify(state))}catch(e){}}
 function log(t){state.news.unshift(t);state.news=state.news.slice(0,35)}
 function setup(){return `<div class="setup"><h1>MMA <span class="tag">Manager</span></h1><p class="sub">Management alpha · Choose your promotion. The other major organisations operate as AI rivals, while regional promotions develop new talent.</p><div class="promos">${Object.entries(PROMOS).map(([k,v])=>`<button class="promo" data-start="${k}"><strong>${k}</strong><div class="muted">${v.desc}</div><p>Starting funds: ${money(v.budget)}</p><span class="pill">Prestige ${v.prestige}</span></button>`).join('')}</div><div class="notice">Prototype includes fictional and real fighters; ratings, records, contracts and budgets are illustrative gameplay estimates. Real promotion branding is for simulation context only; this is not affiliated with these organisations.</div></div>`}
