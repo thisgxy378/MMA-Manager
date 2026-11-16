@@ -88,6 +88,7 @@ function rosterBioTabContent(f,tab){
   const values=labels.map(([name,key])=>[name,key==='loyalty'?loyaltyMeter:personalityDescription(key,scores[key])]);
   const states=ensurePersonalityStates(f);const stateLabel=n=>n>=80?'Very high':n>=65?'High':n>=40?'Balanced':n>=25?'Low':'Very low';
   values.push(['Morale',stateLabel(states.morale)],['Current Confidence',stateLabel(states.confidence)]);
+  if(f.moraleBreakUntil&&f.moraleBreakUntil>state.date)values.push(['Recovery Break','Taking time off until '+esc(f.moraleBreakUntil)]);
   const recent=(states.moraleHistory||[]).slice(-4).reverse();const history=recent.length?'<h4 style="margin:14px 0 6px">Recent morale changes</h4>'+recent.map(x=>'<div class="feed"><span>'+esc(x.reason)+'</span><span class="muted">'+esc(x.date)+' · '+(x.change>0?'Morale improved':x.change<0?'Morale declined':'No change')+'</span></div>').join(''):'';
   return rows(values)+history+'<p class="muted" style="margin-top:14px">Morale and current confidence are temporary states. Underlying personality ratings remain hidden. Gym loyalty reflects the current gym relationship.</p>';
  }
