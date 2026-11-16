@@ -19,7 +19,8 @@ function fighterTier(f){
 function fighterDemand(f){
  const tier=fighterTier(f),band=PURSE_BANDS[tier];
  const factor=Math.min(1,Math.max(0,((f.skill||50)-48)/48*.65+((f.popularity||30)-20)/80*.35));
- const target=Math.round((band.min+(band.max-band.min)*factor)/1000)*1000;
+ const motivation=typeof ensureFighterPersonality==='function'?(ensureFighterPersonality(f),f.hiddenPersonalityFactors.financialMotivation):50;
+ const target=Math.round((band.min+(band.max-band.min)*factor)*(0.85+motivation*.003)/1000)*1000;
  return {tier,band,target:Math.max(band.min,target)};
 }
 function rivalTransfer(f){return f.promotion!==state.player&&Object.prototype.hasOwnProperty.call(PROMOS,f.promotion)}
@@ -58,8 +59,13 @@ function offerAssessment(f,o){
  const base=o.show+(o.flat?0:o.win*.42)+o.bonus/Math.max(1,o.fights);
  const expected=demand*(o.flat?1.35:1.38)*(rivalTransfer(f)?1.35:1);
  const ratio=base/expected;
+ const personality=ensureFighterPersonality(f),traits=f.hiddenPersonalityFactors;
  const reputation=(state.prestige-65)/150-(rivalTransfer(f)?Math.max(0,(PROMOS[f.promotion].prestige-state.prestige)/140):0);
- const odds=Math.max(.04,Math.min(.96,.45+(ratio-1)*1.15+reputation+(o.months>=18?.06:0)));
+ const paySensitivity=.65+traits.financialMotivation/100;
+ const loyaltyPenalty=rivalTransfer(f)?Math.max(0,(traits.promotionLoyalty-50)/220):0;
+ const careerOpportunity=(state.prestige-(PROMOS[f.promotion]?.prestige||45))/300*(personality.ambition/70);
+ const morale=f.temporaryPersonalityStates?.morale??50;
+ const odds=Math.max(.04,Math.min(.96,.45+(ratio-1)*1.15*paySensitivity+reputation+careerOpportunity-loyaltyPenalty+(o.months>=18?.06:0)+(50-morale)/700));
  return {odds,expected};
 }
 function offerValid(o){
@@ -74,7 +80,7 @@ function updateNegotiationPreview(){
 }
 
 function roundMoney(v){return Math.max(0,Math.round(v/1000)*1000)}
-function negotiationPriority(f){const n=f.id%4;return ['Higher guaranteed pay','Shorter contract','Signing bonus','Win bonus'][n]}
+function negotiationPriority(f){ensureFighterPersonality(f);const t=f.hiddenPersonalityFactors;if(t.financialMotivation>=70)return t.riskTolerance<50?'Higher guaranteed pay':'Signing bonus';if(t.careerDrive>=70)return 'Shorter contract';const n=Number(f.id)%4;return ['Higher guaranteed pay','Shorter contract','Signing bonus','Win bonus'][n]}
 function recordNegotiation(status){const f=state.fighters.find(x=>x.id===negotiatingId);if(!f||!negotiationSession)return;const line=f.name+': '+status+' after '+negotiationSession.round+' negotiation round(s)';state.offers.push(line);save()}
 function renderNegotiationProgress(){
  const n=negotiationSession;if(!n)return;
