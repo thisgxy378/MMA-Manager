@@ -741,11 +741,11 @@ function parseRosterCSV(source){
  const rows=[];let row=[],cell='',quoted=false;
  for(let i=0;i<source.length;i++){const c=source[i];if(c==='"'){if(quoted&&source[i+1]==='"'){cell+='"';i++}else quoted=!quoted}
  else if(c===','&&!quoted){row.push(cell);cell=''}
- else if((c==='\\n'||c==='\\r')&&!quoted){if(c==='\\r'&&source[i+1]==='\\n')i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell=''}
+ else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&source[i+1]==='\n')i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell=''}
  else cell+=c}
  if(quoted)throw Error('CSV contains an unclosed quote.');
  row.push(cell);if(row.some(v=>v.trim()))rows.push(row);
- const headers=(rows.shift()||[]).map(h=>h.trim().replace(/^\\uFEFF/,''));
+ const headers=(rows.shift()||[]).map(h=>h.trim().replace(/^\uFEFF/,''));
  return rows.map(values=>Object.fromEntries(headers.map((h,i)=>[h,(values[i]||'').trim()])));
 }
 function prepareRosterImport(raw,filename){
@@ -772,7 +772,7 @@ function prepareRosterImport(raw,filename){
 function downloadRosterTemplate(){
  const columns=['name','gender','division','promotion','nationality','age','wins','losses','draws','skill','potential','popularity','fightingStyle'];
  const example=['Example Fighter','Male','Lightweight','UFC','NZL','26','5','1','0','65','78','30','striker'];
- const csv=columns.join(',')+'\\r\\n'+example.join(',')+'\\r\\n';
+ const csv=columns.join(',')+'\r\n'+example.join(',')+'\r\n';
  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
  const a=document.createElement('a');a.href=url;a.download='mma-manager-roster-template.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
