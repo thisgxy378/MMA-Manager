@@ -316,11 +316,11 @@ function gymWeeklyDevelopment(f){
  const gym=ensureFighterGym(f),age=Number(f.age)||28;
  f.gymTenureWeeks++;
  // Gym loyalty measures attachment to the CURRENT gym, not general personality.
- if(f.gymTenureWeeks%26===0&&f.gymLoyalty<95)f.gymLoyalty++;
+ if(f.gymTenureWeeks%26===0&&f.gymLoyalty<95){const attachment=ensureFighterPersonality(f).loyalty;f.gymLoyalty=Math.min(95,f.gymLoyalty+(attachment>=75?2:1));}
  const a=ensureFighterAttributes(f);
  const groups=[['striking',['accuracy','punchSpeed','kickSpeed','footwork']],['wrestling',['takedowns','takedownDefense','clinchControl']],['bjj',['submissions','submissionDefense','groundEscapes']],['conditioning',['stamina','endurance','recovery']],['tactics',['blocking','headMovement']]];
  // Small attribute gains are more common than tendency changes and depend on gym quality.
- if(age<=33&&Math.random()<.045){
+ if(age<=33&&Math.random()<.045*(.65+ensureFighterPersonality(f).professionalism/140)*( .7+f.hiddenPersonalityFactors.learningAbility/170)){
   const group=groups[Math.floor(Math.random()*groups.length)],key=group[1][Math.floor(Math.random()*group[1].length)];
   if(Math.random()<gym[group[0]]/110&&a[key]<Math.min(99,Number(f.potential)||85)){a[key]++;syncFighterAbility(f)}
  }
@@ -334,8 +334,8 @@ function fighterCareerAI(f){
  if(!f.careerAI)f.careerAI={decisions:[]};
  const ai=f.careerAI,age=Number(f.age)||28,history=f.potentialHistory||[],recent=history.slice(-5);
  const losses=recent.filter(x=>x.won===false).length,damage=Number(f.careerDamage)||0;
- const traits=f.hiddenPersonality||f.personality||{};
- const resilience=Number(traits.resilience)||50,adaptability=Number(traits.adaptability)||50;
+ const traits=ensureFighterPersonality(f),factors=f.hiddenPersonalityFactors;
+ const resilience=traits.resilience,adaptability=traits.adaptability;
  const remember=(type,detail)=>{ai.lastDecision=state.date;ai.decisions.push({date:state.date,type,detail});if(ai.decisions.length>20)ai.decisions.shift();if(f.promotion===state.player||type==='retirement')log(f.name+': '+detail)};
  if(!ai.lastReview){ai.lastReview=state.date;return}
  if((Date.parse(state.date)-Date.parse(ai.lastReview))/86400000<84)return;
@@ -354,7 +354,7 @@ function fighterCareerAI(f){
  }
  const poorFit=losses>=3||age<=30&&f.gymTenureWeeks>=104&&gym.reputation<65;
  const loyalty=Number(f.gymLoyalty)||50;
- const switchChance=(poorFit?.11:.018)*(1-loyalty/120)*(adaptability/65);
+ const switchChance=(poorFit?.11:.018)*(1-loyalty/120)*(adaptability/65)*(1-factors.gymAttachment/180)*(0.6+factors.opennessToChange/130);
  if(f.gymTenureWeeks>=52&&Math.random()<switchChance){
   const candidates=MMA_GYMS.filter(g=>g.id!==gym.id&&g.id!=='regional'&&g.reputation>=gym.reputation-5);
   if(candidates.length){
@@ -826,4 +826,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="events.js?v=98a33bc-fix2"></script><script src="negotiations.js"></script></body></html>
+</script><script src="events.js?v=personality-20261116"></script><script src="negotiations.js"></script></body></html>
