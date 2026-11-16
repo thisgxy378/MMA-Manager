@@ -428,12 +428,38 @@ function fighterCareerAI(f){
   states.motivation=Math.min(100,states.motivation+2);
   remember('persistence','remains committed to training despite recent setbacks.');
  }
- const retirementRisk=(Math.max(0,age-35)*.014+Math.max(0,damage-100)*.0006+(age>=34&&losses>=3?.025:0)-Math.max(0,resilience-50)*.0003)*(1+adversity*(perseverance-1));
- if(age>=35&&Math.random()<Math.min(.25,Math.max(0,retirementRisk))){
-  const former=f.promotion;f.promotion='Retired';f.status='Retired';f.retirementDate=state.date;
-  state.contracts=state.contracts.filter(c=>c.id!==f.id);
-  remember('retirement','retires from professional MMA ('+former+').');return;
+ // Retirement requires sustained career pressure, not merely a losing streak.
+ const states=ensurePersonalityStates(f);
+ const ambition=Number(traits.ambition)||50;
+ const achievements=(Number(f.wins)||0)+(Number(f.titleDefenses)||0)*4;
+ const physicalPressure=Math.max(0,age-33)*2.2+Math.max(0,damage-65)*.18;
+ const motivationPressure=Math.max(0,48-states.motivation)*.45+Math.max(0,43-morale)*.15;
+ const careerFulfilment=Math.min(12,achievements*.22);
+ const careerPressure=Math.max(0,physicalPressure+motivationPressure+careerFulfilment-ambition*.12-persistence*.15);
+ const hasRetirementBasis=age>=34||damage>=105;
+ const uncertain=hasRetirementBasis&&careerPressure>=12;
+ ai.careerOutlook=uncertain?'Questioning Future':states.motivation<35?'Low Motivation':'Committed';
+ ai.careerPressure=careerPressure;
+ if(ai.retirementDiscussion){
+  const discussion=ai.retirementDiscussion;
+  if(!uncertain||states.motivation>=58){
+   ai.retirementDiscussion=null;
+   remember('career','regains motivation and commits to continuing their MMA career.');
+  }else if((Date.parse(state.date)-Date.parse(discussion.date))/86400000>=84){
+   const risk=Math.min(.38,Math.max(0,(careerPressure-12)/100))*(persistence>=80?.5:persistence>=60?.75:1);
+   if(Math.random()<risk){
+    const former=f.promotion;f.promotion='Retired';f.status='Retired';f.retirementDate=state.date;
+    state.contracts=state.contracts.filter(c=>c.id!==f.id);
+    ai.retirementDiscussion=null;
+    remember('retirement','retires from professional MMA after considering their future ('+former+').');return;
+   }
+   discussion.date=state.date;
+  }
+ }else if(uncertain&&Math.random()<Math.min(.65,.12+(careerPressure-12)*.015)){
+  ai.retirementDiscussion={date:state.date,reason:'Career motivation and long-term physical demands'};
+  remember('career-uncertainty','is questioning their future in MMA but has not made a retirement decision.');
  }
+
  if(f.status==='Professional'&&losses>=3&&Math.random()<(.035+adaptability/3000)*(0.75+adversity*.5)*perseverance){
   const ds=divisionSteps(f),idx=ds.indexOf(f.division);
   const options=[ds[idx-1],ds[idx+1]].filter(Boolean);
