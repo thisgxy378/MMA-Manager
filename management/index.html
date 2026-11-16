@@ -307,13 +307,17 @@ function ensurePersonalityStates(f){
  return states;
 }
 function changeFighterMorale(f,amount,reason){
- const states=ensurePersonalityStates(f);
+ const states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors;
  const before=states.morale;
- states.morale=Math.max(0,Math.min(100,Math.round(before+amount)));
- // Morale is a temporary state, never a hidden personality factor.
- // Confidence follows morale, but long-term self-belief remains unchanged.
- states.confidence=Math.max(0,Math.min(100,Math.round(states.confidence+amount*.65)));
- states.lastMoraleEvent={date:state.date,reason,change:states.morale-before};
+ // Resilient fighters are less shaken by setbacks, without losing the benefit of wins.
+ const adjusted=amount<0?amount*(1-(traits.mentalToughness-50)/250):amount;
+ states.morale=Math.max(0,Math.min(100,Math.round(before+adjusted)));
+ const actual=states.morale-before;
+ states.confidence=Math.max(0,Math.min(100,Math.round(states.confidence+actual*.65)));
+ states.lastMoraleEvent={date:state.date,reason,change:actual};
+ if(!Array.isArray(states.moraleHistory))states.moraleHistory=[];
+ states.moraleHistory.push({date:state.date,reason,change:actual});
+ if(states.moraleHistory.length>12)states.moraleHistory.shift();
  return states;
 }
 function fighterFightConfidence(f){
