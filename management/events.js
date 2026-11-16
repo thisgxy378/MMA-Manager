@@ -86,6 +86,8 @@ function rosterBioTabContent(f,tab){
   const loyaltyMeter='<span style="display:inline-flex;align-items:center;gap:8px"><span>'+esc(personalityDescription('loyalty',scores.loyalty))+'</span><span role="meter" aria-label="Gym loyalty" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+loyalty+'" title="Current gym loyalty: '+loyalty+'/100" style="display:inline-block;width:76px;height:6px;background:var(--line);border-radius:5px;overflow:hidden"><span style="display:block;width:'+loyalty+'%;height:100%;background:'+color+'"></span></span></span>';
   const labels=[['Professionalism','professionalism'],['Temperament','temperament'],['Ambition','ambition'],['Loyalty','loyalty'],['Adaptability','adaptability'],['Resilience','resilience'],['Confidence','confidence']];
   const values=labels.map(([name,key])=>[name,key==='loyalty'?loyaltyMeter:personalityDescription(key,scores[key])]);
+  const states=ensurePersonalityStates(f);const stateLabel=n=>n>=80?'Very high':n>=65?'High':n>=40?'Balanced':n>=25?'Low':'Very low';
+  values.push(['Morale',stateLabel(states.morale)],['Current Confidence',stateLabel(states.confidence)]);
   return rows(values)+'<p class="muted" style="margin-top:14px">Personality descriptions reflect underlying traits. The Loyalty meter shows attachment to the current gym; promotion loyalty is tracked separately.</p>';
  }
  if(tab==='history'){
@@ -227,6 +229,7 @@ function mmaResolveScorecards(cards){
 function simulateFightRounds(a,b,scheduledRounds){
  const fighters=[a,b],attrs=new Map(fighters.map(f=>[f.id,ensureFighterAttributes(f)])),tendencies=new Map(fighters.map(f=>[f.id,ensureFighterTendencies(f)]));
  const tendency=(f,key)=>tendencies.get(f.id)[key];
+ const fightConfidence=new Map(fighters.map(f=>[f.id,fighterFightConfidence(f)]));
  const val=(f,key,fallback=65)=>Number(attrs.get(f.id)?.[key])||fallback;
  const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
  const scores={[a.id]:0,[b.id]:0},damage={[a.id]:0,[b.id]:0},stamina={[a.id]:100,[b.id]:100};
@@ -244,7 +247,7 @@ function simulateFightRounds(a,b,scheduledRounds){
   let finish=null,clock=300;
   for(let beat=0;beat<28;beat++){
    clock=Math.max(8,300-Math.round((beat+1)*290/29));
-   const initiative=f=>val(f,'pace')*.18+val(f,'fightIQ')*.12+tendency(f,'pressure')*.12+stamina[f.id]*.18+Math.random()*50;
+   const initiative=f=>val(f,'pace')*.18+val(f,'fightIQ')*.12+tendency(f,'pressure')*.12+stamina[f.id]*.18+(fightConfidence.get(f.id)-50)*.08+Math.random()*50;
    const actor=initiative(a)>=initiative(b)?a:b,target=other(actor);
    const tired=1-stamina[actor.id]/180;
    const spend=n=>{stamina[actor.id]=clamp(stamina[actor.id]-n*tired,4,100)};
