@@ -306,24 +306,40 @@ function ensurePersonalityStates(f){
  for(const key of ['morale','confidence','motivation','financialSatisfaction'])if(!Number.isFinite(Number(states[key])))states[key]=50;
  return states;
 }
+function changeFighterMorale(f,amount,reason){
+ const states=ensurePersonalityStates(f);
+ const before=states.morale;
+ states.morale=Math.max(0,Math.min(100,Math.round(before+amount)));
+ // Morale is a temporary state, never a hidden personality factor.
+ // Confidence follows morale, but long-term self-belief remains unchanged.
+ states.confidence=Math.max(0,Math.min(100,Math.round(states.confidence+amount*.65)));
+ states.lastMoraleEvent={date:state.date,reason,change:states.morale-before};
+ return states;
+}
+function fighterFightConfidence(f){
+ const states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors;
+ return Math.max(0,Math.min(100,Math.round(states.confidence*.55+states.morale*.3+traits.selfBelief*.15)));
+}
 function personalityWeeklyUpdate(f){
  const states=ensurePersonalityStates(f),scores=f.personalityRatings,traits=f.hiddenPersonalityFactors;
- const history=f.potentialHistory||[],last=history[history.length-1];
- const recent=history.slice(-3),wins=recent.filter(x=>x.won===true).length,losses=recent.filter(x=>x.won===false).length;
- const targets={morale:Math.max(20,Math.min(85,50+(wins-losses)*6+(scores.loyalty-50)*.1)),confidence:Math.max(15,Math.min(90,50+(wins-losses)*9+(traits.selfBelief-50)*.2)),motivation:Math.max(20,Math.min(85,50+(scores.ambition-50)*.3-losses*3)),financialSatisfaction:50};
- const contract=state.contracts?.find(c=>c.id===f.id);
- if(contract){const expected=Math.max(1000,6500+(f.skill||50)**2*5);targets.financialSatisfaction=Math.max(15,Math.min(90,50+(Number(contract.show||0)/expected-1)*24));}
- for(const key of Object.keys(targets)){
-  const delta=targets[key]-states[key];
-  if(Math.abs(delta)>=1)states[key]=Math.max(0,Math.min(100,states[key]+Math.sign(delta)*Math.min(2,Math.abs(delta))));
+ // Recover gradually toward a neutral state; do not repeatedly reward old wins.
+ for(const key of ['morale','confidence']){
+  const target=key==='confidence'?Math.round(45+traits.selfBelief*.1):50;
+  if(Math.abs(states[key]-target)>1)states[key]+=Math.sign(target-states[key])*.5;
+  states[key]=Math.round(Math.max(0,Math.min(100,states[key]))*10)/10;
  }
+ const motivationTarget=Math.max(20,Math.min(85,50+(scores.ambition-50)*.3+(states.morale-50)*.25));
+ states.motivation=Math.max(0,Math.min(100,states.motivation+Math.sign(motivationTarget-states.motivation)*Math.min(1,Math.abs(motivationTarget-states.motivation))));
+ const contract=state.contracts?.find(c=>c.id===f.id);
+ const expected=Math.max(1000,6500+(f.skill||50)**2*5);
+ const financialTarget=contract?Math.max(15,Math.min(90,50+(Number(contract.show||0)/expected-1)*24)):50;
+ states.financialSatisfaction+=Math.sign(financialTarget-states.financialSatisfaction)*Math.min(1,Math.abs(financialTarget-states.financialSatisfaction));
  if(!f.personalityDevelopment)f.personalityDevelopment={weeks:0};
  f.personalityDevelopment.weeks++;
  if(f.personalityDevelopment.weeks%52===0){
-  const candidates=[['composure',scores.temperament],['learningAbility',scores.adaptability],['persistence',scores.resilience],['careerDrive',scores.ambition]];
-  const index=Math.floor(f.personalityDevelopment.weeks/52+Number(f.id||0))%candidates.length;
-  const key=candidates[index][0],direction=states.motivation>=45?1:-1;
-  traits[key]=Math.max(0,Math.min(100,traits[key]+direction));
+  const candidates=['composure','learningAbility','persistence','careerDrive'];
+  const key=candidates[(Math.floor(f.personalityDevelopment.weeks/52)+Number(f.id||0))%candidates.length];
+  traits[key]=Math.max(0,Math.min(100,traits[key]+(states.motivation>=45?1:-1)));
   ensureFighterPersonality(f);
  }
 }
