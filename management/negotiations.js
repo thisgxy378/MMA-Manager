@@ -112,7 +112,7 @@ function signNegotiatedContract(f,o){
  state.contracts.push({id:f.id,show:o.show,win:o.win,structure:o.flat?'flat':'showwin',signing:o.bonus,fights:o.fights,weeks:Math.round(o.months*52/12),start:now(),origin});
  log(state.player+' signs '+f.name+' from '+origin+': '+offerText(o)+(fee?' · '+money(fee)+' release fee paid':''));
  const summary=f.name+': '+offerText(o)+' — ACCEPTED in round '+negotiationSession.round;
- state.offers.push(summary);save();negotiationClose();render();
+ state.offers.push(summary);if(typeof sendInboxMessage==='function')sendInboxMessage({subject:'Contract signed: '+f.name,sender:f.name,type:'Contract Offer',body:'Contract accepted: '+offerText(o)+'. The fighter has joined your roster.'});save();negotiationClose();render();
  const box=document.createElement('div');box.className='negotiation-overlay';box.id='negotiationOverlay';
  box.innerHTML='<section class="negotiation-dialog" role="dialog" aria-modal="true"><h2 class="good">Contract agreed</h2><p>'+esc(f.name)+' has signed with '+esc(state.player)+'.</p><p>'+esc(offerText(o))+'</p><button class="primary" id="closeResult">Continue</button></section>';
  document.body.appendChild(box);document.getElementById('closeResult').onclick=negotiationClose;
@@ -126,11 +126,11 @@ function submitNegotiation(){
  if(r<assessment.odds){return signNegotiatedContract(f,o)}
  if(n.round>=n.maxRounds||r>assessment.odds+.72&&assessment.odds<.16){
   n.history.push('Fighter walks away: terms too far apart.');
-  recordNegotiation('NEGOTIATIONS BROKE DOWN');log(f.name+' ends contract talks with '+state.player+'.');save();
+  recordNegotiation('NEGOTIATIONS BROKE DOWN');log(f.name+' ends contract talks with '+state.player+'.');if(typeof sendInboxMessage==='function')sendInboxMessage({subject:'Contract talks ended: '+f.name,sender:f.name,type:'Contract Offer',body:'The fighter rejected the proposed terms and ended negotiations.'});save();
   document.getElementById('offerResult').innerHTML='<div class="negotiation-result bad">Negotiations have broken down. Close this window to try again later.</div>';
   document.getElementById('submitOffer').disabled=true;renderNegotiationProgress();return;
  }
- n.counter=counterOffer(f,o);n.history.push('Fighter counters: '+offerText(n.counter));
+ n.counter=counterOffer(f,o);n.history.push('Fighter counters: '+offerText(n.counter));if(typeof sendInboxMessage==='function')sendInboxMessage({subject:'Contract counteroffer: '+f.name,sender:f.name,type:'Contract Offer',body:'Your latest contract proposal was countered. Requested terms: '+offerText(n.counter)+'. Open Fighter Market to continue negotiations.'});
  document.getElementById('offerResult').innerHTML='<div class="negotiation-result"><strong>Counteroffer received</strong><div>'+esc(offerText(n.counter))+'</div><div class="muted">You can accept these terms or make another offer.</div></div>';
  document.getElementById('submitOffer').disabled=true;document.getElementById('counterActions').style.display='flex';renderNegotiationProgress();
 }
