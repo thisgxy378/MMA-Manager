@@ -322,6 +322,19 @@ function changeFighterMorale(f,amount,reason){
  if(states.moraleHistory.length>12)states.moraleHistory.shift();
  return states;
 }
+function fighterPostLossBreak(f){
+ const states=ensurePersonalityStates(f);
+ const recovery=Number(f.hiddenPersonalityFactors.recoveryMindset)||50;
+ const streak=Number(f.lossStreak)||0;
+ // Only especially damaging psychological setbacks trigger a voluntary break.
+ if(states.morale>32&&streak<3)return;
+ const weeks=Math.max(3,Math.min(12,Math.ceil((50-states.morale)/Math.max(.5,recovery<20?.25:recovery<40?.5:recovery<60?1:recovery<80?1.5:2)/3)));
+ const until=addDays(state.date,weeks*7);
+ if(!f.unavailableUntil||f.unavailableUntil<until)f.unavailableUntil=until;
+ f.moraleBreakUntil=until;
+ f.moraleBreakReason='Taking time away to recover confidence after a difficult loss';
+ if(f.promotion===state.player)log(f.name+' is taking '+weeks+' weeks away from competition to recover after a difficult loss.');
+}
 function fighterFightConfidence(f){
  const states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors;
  return Math.max(0,Math.min(100,Math.round(states.confidence*.55+states.morale*.3+traits.selfBelief*.15)));
@@ -331,7 +344,11 @@ function personalityWeeklyUpdate(f){
  // Recover gradually toward a neutral state; do not repeatedly reward old wins.
  for(const key of ['morale','confidence']){
   const target=key==='confidence'?Math.round(45+traits.selfBelief*.1):50;
-  if(Math.abs(states[key]-target)>1)states[key]+=Math.sign(target-states[key])*.5;
+  if(states[key]<target&&key==='morale'){
+   const recovery=Number(traits.recoveryMindset)||50;
+   const weeklyGain=recovery<20?.25:recovery<40?.5:recovery<60?1:recovery<80?1.5:2;
+   states[key]=Math.min(target,states[key]+weeklyGain);
+  }else if(Math.abs(states[key]-target)>1)states[key]+=Math.sign(target-states[key])*.5;
   states[key]=Math.round(Math.max(0,Math.min(100,states[key]))*10)/10;
  }
  const motivationTarget=Math.max(20,Math.min(85,50+(scores.ambition-50)*.3+(states.morale-50)*.25));
