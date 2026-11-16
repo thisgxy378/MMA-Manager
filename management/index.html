@@ -310,7 +310,9 @@ function changeFighterMorale(f,amount,reason){
  const states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors;
  const before=states.morale;
  // Resilient fighters are less shaken by setbacks, without losing the benefit of wins.
- const adjusted=amount<0?amount*(1-(traits.mentalToughness-50)/250):amount;
+ const toughness=Number(traits.mentalToughness)||50;
+ const lossMultiplier=toughness<20?1.2:toughness<40?1.1:toughness<60?1:toughness<80?.8:.6;
+ const adjusted=amount<0?amount*lossMultiplier:amount;
  states.morale=Math.max(0,Math.min(100,Math.round(before+adjusted)));
  const actual=states.morale-before;
  states.confidence=Math.max(0,Math.min(100,Math.round(states.confidence+actual*.65)));
