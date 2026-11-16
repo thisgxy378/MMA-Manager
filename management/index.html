@@ -432,11 +432,14 @@ function fighterCareerAI(f){
  const states=ensurePersonalityStates(f);
  const ambition=Number(traits.ambition)||50;
  const achievements=(Number(f.wins)||0)+(Number(f.titleDefenses)||0)*4;
- const physicalPressure=Math.max(0,age-33)*2.2+Math.max(0,damage-65)*.18;
- const motivationPressure=Math.max(0,48-states.motivation)*.45+Math.max(0,43-morale)*.15;
- const careerFulfilment=Math.min(12,achievements*.22);
- const careerPressure=Math.max(0,physicalPressure+motivationPressure+careerFulfilment-ambition*.12-persistence*.15);
- const hasRetirementBasis=age>=34||damage>=105;
+ // Age is a minor contextual influence; motivation and physical wear drive career doubts.
+ const agePressure=Math.min(5,Math.max(0,age-35)*.55);
+ const damagePressure=Math.max(0,damage-65)*.32;
+ const motivationPressure=Math.max(0,55-states.motivation)*.65+Math.max(0,45-morale)*.2;
+ // Career fulfilment matters most when the fighter has little ambition left.
+ const careerFulfilment=Math.min(10,achievements*.18)*Math.max(.15,(100-ambition)/100);
+ const careerPressure=Math.max(0,agePressure+damagePressure+motivationPressure+careerFulfilment-ambition*.09-persistence*.13);
+ const hasRetirementBasis=damage>=95||states.motivation<=35||(age>=38&&(damage>=75||states.motivation<=45));
  const uncertain=hasRetirementBasis&&careerPressure>=12;
  ai.careerOutlook=uncertain?'Questioning Future':states.motivation<35?'Low Motivation':'Committed';
  ai.careerPressure=careerPressure;
