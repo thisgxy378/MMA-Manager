@@ -165,7 +165,23 @@ function bindEventManager(){if($('openCreateEvent'))$('openCreateEvent').onclick
  const assess=f=>{const personality=typeof ensureFighterPersonality==='function'?ensureFighterPersonality(f):null;const traits=f.hiddenPersonalityFactors||{};const motivation=Number(f.temporaryPersonalityStates?.motivation??50);const opponent=f===a?b:a;const difficulty=(Number(opponent.skill)||50)-(Number(f.skill)||50);const score=65+motivation*.2+(Number(traits.competitiveness??50)-50)*.12-(Math.max(0,difficulty))*1.2-(daysNotice<21?24:daysNotice<35?10:0)-(f.careerBreak?100:0);return score>=55?'Accepted':score>=35?'Counteroffer':'Rejected'};
  const replyA=assess(a),replyB=assess(b),accepted=replyA==='Accepted'&&replyB==='Accepted';
  if(accepted){e.bouts.push({aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title});sortEventBouts(e)}
- if(typeof sendInboxMessage==='function')sendInboxMessage({subject:'Fight offer: '+a.name+' vs '+b.name,sender:'Fighter Representatives',type:'Fight Offer',body:a.name+': '+replyA+'. '+b.name+': '+replyB+'. '+(accepted?'Both fighters agreed. The fight has been confirmed for '+e.name+'.':replyA==='Counteroffer'||replyB==='Counteroffer'?'At least one fighter requests more preparation time. Propose a later event date from this message.':'At least one fighter declined. No fight has been booked.'),...(accepted?{}:{fightOffer:{eventId:e.id,aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title,replies:{[a.id]:replyA,[b.id]:replyB},attempts:0},actions:[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Close offer'}]})});
+ const declineReason=(f,opponent,status)=>{
+  const motivation=Number(f.temporaryPersonalityStates?.motivation??50);
+  const difficulty=(Number(opponent.skill)||50)-(Number(f.skill)||50);
+  if(f.careerBreak)return 'I am currently taking time away from fighting and cannot commit to this matchup.';
+  if(daysNotice<21)return 'I need more time to prepare. The proposed fight date is too soon.';
+  if(daysNotice<35&&status==='Counteroffer')return 'I would consider this matchup with a longer training camp.';
+  if(difficulty>=12)return 'I do not believe this is the right opponent for me at this stage of my career.';
+  if(motivation<45)return 'My motivation is low right now, and I am not ready to commit to another fight.';
+  if(status==='Counteroffer')return 'I would like to discuss the timing and conditions before accepting.';
+  return 'This matchup does not align with my current career plans.';
+ };
+ if(typeof sendInboxMessage==='function'){
+  for(const [f,opponent,reply] of [[a,b,replyA],[b,a,replyB]]){
+   if(reply==='Accepted')continue;
+   sendInboxMessage({subject:reply==='Rejected'?'Fight declined: '+f.name:'Fight counteroffer: '+f.name,sender:f.name,type:'Fight Offer',fighterId:f.id,body:'Regarding '+e.name+' against '+opponent.name+': '+declineReason(f,opponent,reply),fightOffer:{eventId:e.id,aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title,replies:{[a.id]:replyA,[b.id]:replyB},attempts:0},actions:[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Close offer'}]});
+  }
+ }
  save();render();
  const outcomeBox=document.createElement('div');outcomeBox.className='negotiation-overlay';outcomeBox.id='fightOfferResultOverlay';
  const statusLine=(name,status)=>'<div style="padding:9px 0"><strong>'+esc(name)+'</strong>: <span class="'+(status==='Accepted'?'good':status==='Rejected'?'bad':'')+'">'+esc(status)+'</span></div>';
