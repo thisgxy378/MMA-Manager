@@ -166,22 +166,24 @@ function bindEventManager(){if($('openCreateEvent'))$('openCreateEvent').onclick
  const replyA=assess(a),replyB=assess(b),accepted=replyA==='Accepted'&&replyB==='Accepted';
  if(accepted){e.bouts.push({aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title});sortEventBouts(e)}
  const declineReason=(f,opponent,status)=>{
-  const motivation=Number(f.temporaryPersonalityStates?.motivation??50);
-  const difficulty=(Number(opponent.skill)||50)-(Number(f.skill)||50);
-  if(f.careerBreak)return 'I am currently taking time away from fighting and cannot commit to this matchup.';
-  if(daysNotice<21)return 'I need more time to prepare. The proposed fight date is too soon.';
-  if(daysNotice<35&&status==='Counteroffer')return 'I would consider this matchup with a longer training camp.';
-  if(difficulty>=12)return 'I do not believe this is the right opponent for me at this stage of my career.';
-  if(motivation<45)return 'My motivation is low right now, and I am not ready to commit to another fight.';
-  if(status==='Counteroffer')return 'I would like to discuss the timing and conditions before accepting.';
-  return 'This matchup does not align with my current career plans.';
+  const motivation=Number(f.temporaryPersonalityStates?.motivation??50),difficulty=(Number(opponent.skill)||50)-(Number(f.skill)||50);
+  if(f.careerBreak)return 'I am taking a career break and cannot accept a fight.';
+  if(daysNotice<35)return 'I need more time to prepare for this matchup.';
+  if(difficulty>=12)return 'This opponent is a difficult step up and I need a stronger offer.';
+  if(motivation<45)return 'I am not motivated enough to take this fight under the current terms.';
+  return status==='Counteroffer'?'I want to negotiate the purse or card position.':'This matchup is not right for me at present.';
  };
  if(typeof sendInboxMessage==='function'){
   for(const [f,opponent,reply] of [[a,b,replyA],[b,a,replyB]]){
    if(reply==='Accepted')continue;
-   sendInboxMessage({subject:reply==='Rejected'?'Fight declined: '+f.name:'Fight counteroffer: '+f.name,sender:f.name,type:'Fight Offer',fighterId:f.id,body:'Regarding '+e.name+' against '+opponent.name+': '+declineReason(f,opponent,reply),fightOffer:{eventId:e.id,aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title,replies:{[a.id]:replyA,[b.id]:replyB},attempts:0},actions:[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Close offer'}]});
+   const contract=state.contracts.find(c=>c.id===f.id),basePurse=Number(contract?.show||10000);
+   const request=daysNotice<35?'date':(Number(opponent.skill||50)-Number(f.skill||50)>=12?'purse':reply==='Counteroffer'?'position':'opponent';
+   const requestedPurse=Math.round(basePurse*1.3/1000)*1000;
+   const demand=request==='date'?'A fight date at least 42 days from today':request==='purse'?'A guaranteed purse of '+money(requestedPurse):request==='position'?'A higher card position (Co-Main Event or Main Event)':'A different opponent';
+   sendInboxMessage({subject:reply==='Rejected'?'Fight declined: '+f.name:'Fight counteroffer: '+f.name,sender:f.name,type:'Fight Offer',fighterId:f.id,body:'Regarding '+e.name+' against '+opponent.name+': '+declineReason(f,opponent,reply)+' Requested change: '+demand+'.',fightOffer:{eventId:e.id,aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title,replies:{[a.id]:replyA,[b.id]:replyB},request,requestedPurse,basePurse,attempts:0},actions:[{id:'fight-accept',label:'Accept counteroffer'},{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}]});
   }
  }
+
  save();render();
  const outcomeBox=document.createElement('div');outcomeBox.className='negotiation-overlay';outcomeBox.id='fightOfferResultOverlay';
  const statusLine=(name,status)=>'<div style="padding:9px 0"><strong>'+esc(name)+'</strong>: <span class="'+(status==='Accepted'?'good':status==='Rejected'?'bad':'')+'">'+esc(status)+'</span></div>';
