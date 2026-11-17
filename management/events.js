@@ -122,7 +122,14 @@ function bindFighterCards(){
  const q=($('eventFighterSearch')?.value||'').trim().toLowerCase(),gender=$('eventFilterGender')?.value||'',division=$('eventFilterDivision')?.value||'',sort=$('eventFighterSort')?.value||'name';
  const grid=$('eventFighterGrid');if(!grid)return;
  const cards=Array.from(grid.querySelectorAll('[data-fighter-card]'));
- cards.forEach(card=>{card.hidden=!(card.dataset.search.includes(q)&&(!gender||card.dataset.gender===gender)&&(!division||card.dataset.division===division))});
+ const selectedA=state.fighters.find(f=>f.id===Number($('newFightA')?.value)),selectedB=state.fighters.find(f=>f.id===Number($('newFightB')?.value));
+ cards.forEach(card=>{
+ const fighter=state.fighters.find(f=>f.id===Number(card.dataset.fighterCard));
+ const selected=fighter&&(fighter.id===selectedA?.id||fighter.id===selectedB?.id);
+ const opponent=selectedA&&!selectedB?selectedA:selectedB&&!selectedA?selectedB:null;
+ const compatible=!opponent||!!(fighter&&fighter.id!==opponent.id&&eligibleFightDivision(opponent,fighter));
+ card.hidden=!(card.dataset.search.includes(q)&&(!gender||card.dataset.gender===gender)&&(!division||card.dataset.division===division)&&(selected||compatible));
+ });
  const numeric={ability:'ability',potential:'potential',popularity:'popularity',ageAsc:'age',ageDesc:'age',wins:'wins'};
  cards.sort((a,b)=>sort==='name'?a.dataset.name.localeCompare(b.dataset.name):sort==='ageAsc'?Number(a.dataset.age)-Number(b.dataset.age):Number(b.dataset[numeric[sort]])-Number(a.dataset[numeric[sort]])||a.dataset.name.localeCompare(b.dataset.name));
  cards.forEach(card=>grid.appendChild(card));
@@ -138,6 +145,7 @@ function bindFighterCards(){
  if(opponent&&!eligibleFightDivision(f,opponent))return alert('Fighters must be the same gender and within one weight division.');
  $('newFight'+side).value=id;showFighterBio(id,'fighterBio'+side);
  document.querySelectorAll('[data-pick-fighter]').forEach(x=>{const chosen=$('newFight'+x.dataset.side).value===x.dataset.pickFighter;x.classList.toggle('primary',chosen);x.setAttribute('aria-pressed',String(chosen))});
+ filterFighters();
  });
 }
 
