@@ -114,7 +114,8 @@ function showFighterBio(id,target){
  const el=document.getElementById(target);if(!el)return;
  const f=state.fighters.find(x=>x.id===Number(id));
  if(!f){el.innerHTML='<span class="muted">No fighter selected</span>';return}
- el.innerHTML='<div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><strong>'+esc(f.name)+'</strong><span class="pill">'+esc(f.division)+'</span><span class="muted">'+(f.wins||0)+'-'+(f.losses||0)+' · Ability '+(f.skill??'—')+'</span></div>';
+ const details=[['Nationality',f.nationality||'Unknown'],['Gender',f.gender||'Male'],['Division',f.division],['Fighting Style',FIGHTING_STYLES[ensureFightingStyle(f)]?.label||'Unknown'],['Age',f.age],['Record',(f.wins||0)+'-'+(f.losses||0)+' professional'],['Ability',f.skill??'—'],['Popularity',f.popularity??'—']];
+ el.innerHTML='<strong style="display:block;margin-bottom:12px">'+esc(f.name)+'</strong><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px">'+details.map(([label,value])=>'<div style="padding:9px 0;border-bottom:1px solid rgba(130,150,170,.12);min-width:0"><div class="muted" style="font-size:12px">'+esc(label)+'</div><strong>'+esc(String(value))+'</strong></div>').join('')+'</div>';
 }
 document.addEventListener('change',event=>{const control=event.target.closest('[data-change-division]');if(!control||!control.value)return;if(!changeFighterDivision(control.dataset.changeDivision,control.value))alert('Division change unavailable. Only adjacent divisions are allowed, and the fighter cannot be booked.');});
 
