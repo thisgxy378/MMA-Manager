@@ -409,8 +409,29 @@ function gymWeeklyDevelopment(f){
 function fighterHasBooking(f){return state.events.some(e=>!e.done&&(e.aid===f.id||e.bid===f.id||(e.bouts||[]).some(b=>b.aid===f.id||b.bid===f.id)))}
 function ensureInbox(){if(!Array.isArray(state.inbox))state.inbox=[];return state.inbox}
 function sendInboxMessage(data){const inbox=ensureInbox();if(data.key&&inbox.some(m=>m.key===data.key))return;inbox.unshift({id:'msg-'+Date.now()+'-'+Math.floor(Math.random()*100000),date:state.date,read:false,status:data.actions?'Pending':'Information',...data});if(inbox.length>250)inbox.length=250}
-function inboxView(){const messages=ensureInbox();return '<section class="panel"><h2>Inbox <span class="pill">'+messages.filter(m=>!m.read).length+' unread</span></h2><p class="muted">Fighter messages and management decisions. Messages are saved with your career.</p>'+(messages.length?messages.map(m=>'<div class="feed" style="margin-bottom:12px"><strong>'+esc(m.subject)+'</strong> <span class="muted">'+esc(m.date)+(m.read?'':' · Unread')+'</span><div class="muted">'+esc(m.sender||'Management')+' · '+esc(m.type||'Information')+'</div><p>'+esc(m.body)+'</p>'+(m.status==='Pending'&&m.actions?m.actions.map(a=>'<button data-inbox-reply="'+esc(m.id)+'" data-reply="'+esc(a.id)+'">'+esc(a.label)+'</button>').join(' '):'<span class="muted">'+esc(m.response||m.status)+'</span>')+'</div>').join(''):'<div class="empty">No messages yet.</div>')+'</section>'}
-function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id);if(!m||m.status!=='Pending')return;const f=state.fighters.find(x=>x.id===m.fighterId);if(!f){m.status='Closed';save();render();return}const states=ensurePersonalityStates(f);
+function inboxView(){const messages=ensureInbox();return '<section class="panel"><h2>Inbox <span class="pill">'+messages.filter(m=>!m.read).length+' unread</span></h2><p class="muted">Fighter messages and management decisions. Messages are saved with your career.</p>'+(messages.length?messages.map(m=>'<div class="feed" style="margin-bottom:12px"><strong>'+esc(m.subject)+'</strong> <span class="muted">'+esc(m.date)+(m.read?'':' · Unread')+'</span><div class="muted">'+esc(m.sender||'Management')+' · '+esc(m.type||'Information')+'</div><p>'+esc(m.body)+'</p>'+(m.status==='Pending'&&m.actions?(m.fightOffer&&m.revising?'<label>Proposed event date <input type="date" min="'+esc(addDays(state.date,21))+'" id="fight-date-'+esc(m.id)+'" value="'+esc(addDays(state.date,42))+'"></label> ':'')+m.actions.map(a=>'<button data-inbox-reply="'+esc(m.id)+'" data-reply="'+esc(a.id)+'">'+esc(a.label)+'</button>').join(' '):'<span class="muted">'+esc(m.response||m.status)+'</span>')+'</div>').join(''):'<div class="empty">No messages yet.</div>')+'</section>'}
+function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id);if(!m||m.status!=='Pending')return;if(m.fightOffer){
+ const offer=m.fightOffer;
+ if(action==='fight-close'){m.status='Closed';m.response='Offer closed without a booking.';save();render();return}
+ if(action==='fight-revise'&&!m.revising){m.revising=true;m.actions=[{id:'fight-revise',label:'Submit revised offer'},{id:'fight-close',label:'Close offer'}];save();render();return}
+ if(action!=='fight-revise')return;
+ const date=document.getElementById('fight-date-'+m.id)?.value;
+ if(!date||date<addDays(state.date,21))return alert('Choose a date at least 21 days from today.');
+ const e=state.events.find(x=>x.id===offer.eventId),a=state.fighters.find(x=>x.id===offer.aid),b=state.fighters.find(x=>x.id===offer.bid);
+ if(!e||e.done||!a||!b)return alert('This fight offer is no longer available.');
+ if(state.events.some(x=>x!==e&&!x.done&&(x.date||x.day)===date))return alert('Another event is scheduled for that date.');
+ if(e.bouts.some(x=>[x.aid,x.bid].some(id=>id===a.id||id===b.id)))return alert('A fighter is already booked on this card.');
+ if(!eligibleFightDivision(a,b)||[a,b].some(f=>f.careerBreak||f.unavailableUntil&&f.unavailableUntil>date))return alert('A fighter is no longer eligible or available for this date.');
+ const replies=offer.replies||{};
+ const nextA=replies[a.id]==='Accepted'?'Accepted':replies[a.id]==='Counteroffer'?'Accepted':'Rejected';
+ const nextB=replies[b.id]==='Accepted'?'Accepted':replies[b.id]==='Counteroffer'?'Accepted':'Rejected';
+ const confirmed=nextA==='Accepted'&&nextB==='Accepted';
+ if(confirmed){e.date=date;e.bouts.push({aid:a.id,bid:b.id,slot:offer.slot,rounds:offer.rounds,title:offer.title});m.status='Resolved';m.response='Revised offer accepted by both fighters. Fight booked for '+date+'.';m.actions=null}
+ else{m.status='Closed';m.response='Revised offer declined. '+a.name+': '+nextA+'; '+b.name+': '+nextB+'.'}
+ m.body+=' Revised offer for '+date+': '+a.name+' '+nextA+', '+b.name+' '+nextB+'.';
+ m.read=true;save();render();return
+ }
+ const f=state.fighters.find(x=>x.id===m.fighterId);if(!f){m.status='Closed';save();render();return}const states=ensurePersonalityStates(f);
  if(action==='encourage'){states.motivation=Math.min(100,states.motivation+4);changeFighterMorale(f,2,'Manager encouragement');m.response='You encouraged the fighter to continue.'}
  else if(action==='break'){f.careerBreak={start:state.date,minimumUntil:addDays(state.date,56),motivationTarget:52};m.response='Career break approved. Return requires recovered motivation and at least eight weeks.'}
  else if(action==='respect'){m.response='You respected their concerns and agreed to revisit the discussion.'}
@@ -1018,4 +1039,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="events.js?v=compatible-opponents-20261117"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="events.js?v=fight-reoffer-20261117"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
