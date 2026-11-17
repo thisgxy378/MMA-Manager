@@ -177,7 +177,7 @@ function bindEventManager(){if($('openCreateEvent'))$('openCreateEvent').onclick
   for(const [f,opponent,reply] of [[a,b,replyA],[b,a,replyB]]){
    if(reply==='Accepted')continue;
    const contract=state.contracts.find(c=>c.id===f.id),basePurse=Number(contract?.show||10000);
-   const request=daysNotice<35?'date':(Number(opponent.skill||50)-Number(f.skill||50)>=12?'purse':reply==='Counteroffer'?'position':'opponent';
+   const request=daysNotice<35?'date':(Number(opponent.skill||50)-Number(f.skill||50))>=12?'purse':reply==='Counteroffer'?'position':'opponent';
    const requestedPurse=Math.round(basePurse*1.3/1000)*1000;
    const demand=request==='date'?'A fight date at least 42 days from today':request==='purse'?'A guaranteed purse of '+money(requestedPurse):request==='position'?'A higher card position (Co-Main Event or Main Event)':'A different opponent';
    sendInboxMessage({subject:reply==='Rejected'?'Fight declined: '+f.name:'Fight counteroffer: '+f.name,sender:f.name,type:'Fight Offer',fighterId:f.id,body:'Regarding '+e.name+' against '+opponent.name+': '+declineReason(f,opponent,reply)+' Requested change: '+demand+'.',fightOffer:{eventId:e.id,aid:a.id,bid:b.id,slot,rounds:(title||slot==='Main Event')?5:Number($('newFightRounds').value),title,replies:{[a.id]:replyA,[b.id]:replyB},request,requestedPurse,basePurse,attempts:0},actions:[{id:'fight-accept',label:'Accept counteroffer'},{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}]});
