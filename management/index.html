@@ -451,8 +451,8 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  if(!e||e.done||!fighter)return alert('This offer is no longer available.');
  const originalOpponent=state.fighters.find(x=>x.id===(fighter.id===offer.aid?offer.bid:offer.aid));
  const opponent=action==='fight-accept'?originalOpponent:state.fighters.find(x=>x.id===Number(document.getElementById('fight-opponent-'+m.id)?.value));
- const date=action==='fight-accept'?(offer.request==='date'?addDays(state.date,offer.minimumNoticeDays||42):e.date):document.getElementById('fight-date-'+m.id)?.value;
- const purse=action==='fight-accept'?(offer.request==='purse'?offer.requestedPurse:offer.basePurse):Number(document.getElementById('fight-purse-'+m.id)?.value);
+ const date=action==='fight-accept'?(offer.request==='date'?addDays(state.date,offer.minimumNoticeDays||42):(offer.date||e.date)):document.getElementById('fight-date-'+m.id)?.value;
+ const purse=action==='fight-accept'?(offer.request==='purse'?offer.requestedPurse:(offer.purses?.[fighter.id]??offer.basePurse)):Number(document.getElementById('fight-purse-'+m.id)?.value);
  const slot=action==='fight-accept'&&offer.request==='position'?'Co-Main Event':action==='fight-accept'?offer.slot:document.getElementById('fight-slot-'+m.id)?.value;
  if(!opponent||!eligibleFightDivision(fighter,opponent)||opponent.id===fighter.id)return alert('Select an eligible opponent in the same or adjacent weight division.');
  if(!date||date<addDays(state.date,21))return alert('Select a date at least 21 days from today.');
@@ -468,20 +468,26 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  const days=Math.round((Date.parse(date)-Date.parse(state.date))/86400000);
  const cutsWeight=f=>{const ds=divisionSteps(f);return ds.indexOf(f.division)>ds.indexOf(weightClass)};
  const minimumDays=f=>cutsWeight(f)?63:35;
- const purseFor=f=>f.id===fighter.id?purse:Number(state.contracts.find(c=>c.id===f.id)?.show||10000);
+ const agreed=offer.agreed||{};
+ const unchanged=f=>{const a=agreed[f.id];return a&&String(a.opponentId)===String(f.id===fighter.id?opponent.id:fighter.id)&&a.date===date&&a.slot===slot&&a.weightClass===weightClass};
+ const purseFor=f=>f.id===fighter.id?purse:Number(agreed[f.id]?.purse??state.contracts.find(c=>c.id===f.id)?.show??10000);
  const evaluate=f=>evaluateFightOffer(f,f.id===fighter.id?opponent:fighter,{date,slot,weightClass,purse:purseFor(f),attempts:offer.attempts||0,lowballCount:offer.lowballCount||0});
- const responses=[fighter,opponent].map(f=>({fighter:f,...evaluate(f)}));
+ const responses=[fighter,opponent].map(f=>({fighter:f,...(unchanged(f)&&purseFor(f)>=agreed[f.id].purse?{status:'Accepted',reason:'Previously agreed terms remain unchanged.',requestedPurse:agreed[f.id].purse,minimumDays:35}:evaluate(f))}));
  const allAccepted=responses.every(x=>x.status==='Accepted');
- const lowball=responses.some(x=>purseFor(x.fighter)<x.requestedPurse*.75);
+ offer.agreed=offer.agreed||{};
+ responses.forEach(x=>{if(x.status==='Accepted')offer.agreed[x.fighter.id]={opponentId:x.fighter.id===fighter.id?opponent.id:fighter.id,date,slot,weightClass,purse:purseFor(x.fighter)};else delete offer.agreed[x.fighter.id]});
+ const lowball=responses.some(x=>x.status!=='Accepted'&&purseFor(x.fighter)<x.requestedPurse*.75);
  offer.lowballCount=(offer.lowballCount||0)+(lowball?1:0);
  offer.attempts=(offer.attempts||0)+1;
- m.body+='\\nOffer '+offer.attempts+': '+date+' · '+slot+' · '+money(purse)+' · '+opponent.name+'. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
+ m.body+='\nOffer '+offer.attempts+': '+date+' · '+slot+' · '+money(purse)+' · '+opponent.name+'. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
  if(!allAccepted){
   m.revising=false;m.actions=responses.some(x=>x.status==='Rejected')?[{id:'fight-close',label:'Close negotiations'}]:[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}];
-  m.response='Counteroffer received. '+responses.filter(x=>x.status!=='Accepted').map(x=>x.reason).join(' ');
-  m.fightOffer.requestedPurse=Math.max(purse,...responses.filter(x=>x.status!=='Accepted').map(x=>x.requestedPurse));
+  m.response='Negotiations ongoing. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
+  m.fightOffer.requestedPurse=Math.max(purse,...responses.filter(x=>x.fighter.id===fighter.id&&x.status!=='Accepted').map(x=>x.requestedPurse));
   m.fightOffer.minimumNoticeDays=Math.max(...responses.map(x=>minimumDays(x.fighter)));
   m.fightOffer.slot=slot;
+  m.fightOffer.date=date;
+  m.fightOffer.purses={...Object.fromEntries(responses.map(x=>[x.fighter.id,purseFor(x.fighter)]))};
   m.fightOffer.aid=fighter.id;m.fightOffer.bid=opponent.id;
   save();render();return
  }
