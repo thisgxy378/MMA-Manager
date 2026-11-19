@@ -453,7 +453,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  const originalOpponent=state.fighters.find(x=>x.id===(fighter.id===offer.aid?offer.bid:offer.aid));
  const opponent=action==='fight-accept'?originalOpponent:state.fighters.find(x=>x.id===Number(document.getElementById('fight-opponent-'+m.id)?.value));
  const date=action==='fight-accept'?(offer.request==='date'?saturdayAfterWeeks(Math.max(3,Math.ceil((offer.minimumNoticeDays||42)/7))):saturdayFromDate(offer.date||e.date)):saturdayAfterWeeks(document.getElementById('fight-date-'+m.id)?.value);
- const purse=action==='fight-accept'?(offer.request==='purse'?offer.requestedPurse:(offer.purses?.[fighter.id]??offer.basePurse)):Number(document.getElementById('fight-purse-'+m.id)?.value);
+ const purse=action==='fight-accept'?(offer.demands?.[fighter.id]?.request==='purse'?offer.demands[fighter.id].requestedPurse:offer.request==='purse'&&!offer.demands?offer.requestedPurse:(offer.purses?.[fighter.id]??offer.basePurse)):Number(document.getElementById('fight-purse-'+m.id)?.value);
  const opponentPurse=action==='fight-accept'?Number(offer.demands?.[opponent?.id]?.requestedPurse??offer.purses?.[opponent?.id]??state.contracts.find(c=>c.id===opponent?.id)?.show??10000):Number(document.getElementById('fight-opponent-purse-'+m.id)?.value);
  if(!Number.isFinite(opponentPurse)||opponentPurse<0)return alert('Enter a valid opponent guaranteed purse.');
  const slot=action==='fight-accept'&&offer.request==='position'?'Co-Main Event':action==='fight-accept'?offer.slot:document.getElementById('fight-slot-'+m.id)?.value;
@@ -483,7 +483,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  const lowball=responses.some(x=>x.status!=='Accepted'&&purseFor(x.fighter)<x.requestedPurse*.75);
  offer.lowballCount=(offer.lowballCount||0)+(lowball?1:0);
  offer.attempts=(offer.attempts||0)+1;
- m.body+='\nOffer '+offer.attempts+': '+date+' · '+slot+' · '+money(purse)+' · '+opponent.name+'. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
+ m.body+='\nOffer '+offer.attempts+': '+date+' · '+slot+' · '+fighter.name+' '+money(purse)+' / '+opponent.name+' '+money(opponentPurse)+'. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
  if(!allAccepted){
   m.revising=false;m.actions=responses.some(x=>x.status==='Rejected')?[{id:'fight-close',label:'Close negotiations'}]:[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}];
   m.response='Negotiations ongoing. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
