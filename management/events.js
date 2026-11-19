@@ -1,6 +1,6 @@
 function saturdayAfterWeeks(weeks){const base=addDays(state.date,Math.max(1,Number(weeks)||1)*7);const day=new Date(base+'T12:00:00').getDay();return addDays(base,(6-day+7)%7)}
-function weeksUntilSaturday(date){for(let w=1;w<=104;w++)if(saturdayAfterWeeks(w)>=date)return w;return 104}
-function eventWeekOptions(selected){return Array.from({length:104},(_,i)=>i+1).map(w=>'<option value="'+w+'"'+(w===selected?' selected':'')+'>'+w+' week'+(w===1?'':'s')+' — '+shortDate(saturdayAfterWeeks(w))+'</option>').join('')}
+function weeksUntilSaturday(date){for(let w=1;w<=52;w++)if(saturdayAfterWeeks(w)>=date)return w;return 52}
+function eventWeekOptions(selected){return Array.from({length:52},(_,i)=>i+1).map(w=>'<option value="'+w+'"'+(w===selected?' selected':'')+'>'+w+' week'+(w===1?'':'s')+' away · Saturday '+shortDate(saturdayAfterWeeks(w))+'</option>').join('')}
 
 const oldBind=bind,oldMigrate=migrate;
 
