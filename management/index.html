@@ -417,14 +417,19 @@ function evaluateFightOffer(f,opponent,terms){
  const classes=divisionSteps(f),cutting=classes.indexOf(f.division)>classes.indexOf(terms.weightClass);
  const minimumDays=cutting?63:Math.round(28+(100-motivation)*.12);
  const contract=state.contracts.find(c=>c.id===f.id),base=Number(contract?.show||10000);
- const premium=Math.max(0,difficulty)*(.012+(100-competitiveness)*.00012)+Math.max(0,popularity-65)*.003;
- const requestedPurse=Math.ceil(base*(1+premium)/1000)*1000;
+ const rankList=rankingPositions(f.promotion,f.gender||'Male',f.division),rankIndex=rankList.indexOf(f.id);
+ const rankPower=rankIndex<0?0:Math.max(0,1-rankIndex/14);
+ const bouts=Math.max(0,Number(f.wins||0)+Number(f.losses||0)+Number(f.draws||0));
+ const experiencePower=Math.min(1,bouts/25),popularityPower=Math.min(1,Math.max(0,popularity)/100);
+ const bargainingPower=Math.max(0,Math.min(1,rankPower*.45+popularityPower*.35+experiencePower*.20));
+ const premium=Math.max(0,difficulty)*(.006+(100-competitiveness)*.00007)+Math.max(0,popularity-65)*.002;
+ const requestedPurse=Math.ceil(base*(1+premium*(.25+bargainingPower*.95))/1000)*1000;
  if(f.careerBreak)return {status:'Rejected',reason:'Currently on a career break.',request:'opponent',requestedPurse,minimumDays};
  if(days<minimumDays)return {status:'Counteroffer',reason:'Needs '+minimumDays+' days to prepare'+(cutting?' and safely make weight':'')+'.',request:'date',requestedPurse,minimumDays};
  if(Number(terms.purse)<requestedPurse)return {status:'Counteroffer',reason:'Requests a guaranteed purse of '+money(requestedPurse)+'.',request:'purse',requestedPurse,minimumDays};
- if(difficulty>=12&&competitiveness<65&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
+ if(difficulty>=12&&competitiveness<65&&bargainingPower>=.55&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
  if(motivation<25&&difficulty>8)return {status:'Rejected',reason:'Not interested in this opponent at present.',request:'opponent',requestedPurse,minimumDays};
- return {status:'Accepted',reason:'Agrees to the proposed terms.',request:null,requestedPurse,minimumDays};
+ return {status:'Accepted',reason:'Agrees to the proposed terms.',request:null,requestedPurse,minimumDays,bargainingPower};
 }
 function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id);if(!m||m.status!=='Pending')return;if(m.fightOffer){
  const offer=m.fightOffer;
