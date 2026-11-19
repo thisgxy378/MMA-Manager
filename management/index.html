@@ -426,15 +426,19 @@ function evaluateFightOffer(f,opponent,terms){
  const bargainingPower=Math.max(0,Math.min(1,rankPower*.45+popularityPower*.35+experiencePower*.20));
  const leverage=Math.max(0,Math.min(1,bargainingPower*.75+Number(traits.negotiatingPower??50)/100*.25));
  const attempts=Math.max(0,Number(terms.attempts||0));
- const fatigue=Math.min(1,attempts*Number(traits.negotiationFatigue??50)/260);
+ const fatigue=Math.min(1,attempts*Number(traits.negotiationFatigue??50)/260+Math.max(0,Number(terms.lowballCount||0))*.14);
  const willingness=Number(traits.compromise??50)/100;
  const premium=Math.max(0,difficulty)*(.006+(100-competitiveness)*.00007)+Math.max(0,popularity-65)*.002;
  const requestedPurse=Math.ceil(base*(1+premium*(.25+leverage*.95)*(1-fatigue*willingness*.65))/1000)*1000;
+ const offeredPurse=Number(terms.purse)||0;
+ const isLowball=offeredPurse<requestedPurse*.75;
+ const patience=Math.max(2,Math.round(3+(100-Number(traits.negotiationFatigue??50))/28+Number(traits.compromise??50)/45));
+ if(attempts>=patience&&(isLowball||Number(terms.lowballCount||0)>=2)&&fatigue>.3)return {status:'Rejected',reason:'Repeated inadequate offers have exhausted negotiations. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
  if(f.careerBreak)return {status:'Rejected',reason:'Currently on a career break.',request:'opponent',requestedPurse,minimumDays};
  if(days<minimumDays)return {status:'Counteroffer',reason:'Needs '+minimumDays+' days to prepare'+(cutting?' and safely make weight':'')+'.',request:'date',requestedPurse,minimumDays};
  if(Number(terms.purse)<requestedPurse)return {status:'Counteroffer',reason:'Requests a guaranteed purse of '+money(requestedPurse)+'.',request:'purse',requestedPurse,minimumDays};
  if(difficulty>=12&&competitiveness<65&&bargainingPower>=.55&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
- if(attempts>=3&&fatigue>.55&&willingness<.35)return {status:'Rejected',reason:'Negotiations have dragged on too long. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
+ if(attempts>=patience&&fatigue>.55&&willingness<.35)return {status:'Rejected',reason:'Negotiations have dragged on too long. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
  if(motivation<25&&difficulty>8)return {status:'Rejected',reason:'Not interested in this opponent at present.',request:'opponent',requestedPurse,minimumDays};
  return {status:'Accepted',reason:'Agrees to the proposed terms.',request:null,requestedPurse,minimumDays,bargainingPower};
 }
@@ -465,15 +469,17 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  const cutsWeight=f=>{const ds=divisionSteps(f);return ds.indexOf(f.division)>ds.indexOf(weightClass)};
  const minimumDays=f=>cutsWeight(f)?63:35;
  const purseFor=f=>f.id===fighter.id?purse:Number(state.contracts.find(c=>c.id===f.id)?.show||10000);
- const evaluate=f=>evaluateFightOffer(f,f.id===fighter.id?opponent:fighter,{date,slot,weightClass,purse:purseFor(f),attempts:offer.attempts||0});
+ const evaluate=f=>evaluateFightOffer(f,f.id===fighter.id?opponent:fighter,{date,slot,weightClass,purse:purseFor(f),attempts:offer.attempts||0,lowballCount:offer.lowballCount||0});
  const responses=[fighter,opponent].map(f=>({fighter:f,...evaluate(f)}));
  const allAccepted=responses.every(x=>x.status==='Accepted');
+ const lowball=responses.some(x=>purseFor(x.fighter)<x.requestedPurse*.75);
+ offer.lowballCount=(offer.lowballCount||0)+(lowball?1:0);
  offer.attempts=(offer.attempts||0)+1;
  m.body+='\\nOffer '+offer.attempts+': '+date+' · '+slot+' · '+money(purse)+' · '+opponent.name+'. '+responses.map(x=>x.fighter.name+': '+x.status+' — '+x.reason).join(' ');
  if(!allAccepted){
-  m.revising=false;m.actions=[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}];
+  m.revising=false;m.actions=responses.some(x=>x.status==='Rejected')?[{id:'fight-close',label:'Close negotiations'}]:[{id:'fight-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}];
   m.response='Counteroffer received. '+responses.filter(x=>x.status!=='Accepted').map(x=>x.reason).join(' ');
-  m.fightOffer.requestedPurse=Math.max(purse,...responses.filter(x=>x.status!=='Accepted').map(x=>{const c=state.contracts.find(c=>c.id===x.fighter.id);const base=Number(c?.show||10000);const difficulty=Math.max(0,Number((x.fighter.id===fighter.id?opponent:fighter).skill||50)-Number(x.fighter.skill||50));return Math.ceil(base*(1+Math.min(.5,difficulty*.02))/1000)*1000}));
+  m.fightOffer.requestedPurse=Math.max(purse,...responses.filter(x=>x.status!=='Accepted').map(x=>x.requestedPurse));
   m.fightOffer.minimumNoticeDays=Math.max(...responses.map(x=>minimumDays(x.fighter)));
   m.fightOffer.slot=slot;
   m.fightOffer.aid=fighter.id;m.fightOffer.bid=opponent.id;
