@@ -417,9 +417,14 @@ function evaluateFightOffer(f,opponent,terms){
  const competitiveness=Number(traits.competitiveness??50),motivation=Number(states.motivation??50),popularity=Number(f.popularity??50);
  const difficulty=Number(opponent.skill||50)-Number(f.skill||50),days=Math.max(0,Math.round((Date.parse(terms.date)-Date.parse(state.date))/86400000));
  const classes=divisionSteps(f),cutting=classes.indexOf(f.division)>classes.indexOf(terms.weightClass);
- const minimumDays=cutting?63:21;
+ const minimumDays=cutting?63:7;
  const preferredDays=cutting?63:Math.round(35+(100-motivation)*.08);
  const shortNotice=!cutting&&days<preferredDays;
+ const shortNoticeScore=Math.max(0,Math.min(100,motivation*.35+competitiveness*.30+Number(traits.compromise??50)*.20+(100-Number(traits.negotiatingPower??50))*.15));
+ const noticePressure=Math.max(0,(preferredDays-days)/preferredDays);
+ const shortNoticeChance=Math.max(.04,Math.min(.96,(shortNoticeScore/100)*1.12-noticePressure*.42));
+ const shortNoticeRoll=(()=>{const key=[f.id,opponent.id,terms.date,terms.weightClass].join('|');let hash=2166136261;for(let i=0;i<key.length;i++)hash=Math.imul(hash^key.charCodeAt(i),16777619);return (hash>>>0)/4294967296})();
+ const willingShortNotice=!shortNotice||shortNoticeRoll<shortNoticeChance;
  const contract=state.contracts.find(c=>c.id===f.id),base=Number(contract?.show||10000);
  const rankList=rankingPositions(f.promotion,f.gender||'Male',f.division),rankIndex=rankList.indexOf(f.id);
  const rankPower=rankIndex<0?0:Math.max(0,1-rankIndex/14);
@@ -433,7 +438,7 @@ function evaluateFightOffer(f,opponent,terms){
  const premium=Math.max(0,difficulty)*(.006+(100-competitiveness)*.00007)+Math.max(0,popularity-65)*.002;
  const extraDemand=Math.max(0,premium*(.25+leverage*.95)*(1-fatigue*willingness*.65));
  const exceptional=extraDemand>.12&&(difficulty>=10||popularity>=75)&&leverage>.35;
- const shortNoticePremium=shortNotice?Math.max(0,(preferredDays-days)/preferredDays)*(.15+leverage*.55)*(1-willingness*.4):0;
+ const shortNoticePremium=shortNotice&&willingShortNotice?noticePressure*(.15+leverage*.55)*(1-willingness*.4):0;
  const requestedPurse=Math.ceil(base*((exceptional?extraDemand:0)+shortNoticePremium)/1000)*1000;
  const offeredPurse=Number(terms.purse)||0;
  const isLowball=offeredPurse<requestedPurse*.75;
@@ -441,7 +446,7 @@ function evaluateFightOffer(f,opponent,terms){
  if(attempts>=patience&&(isLowball||Number(terms.lowballCount||0)>=2)&&fatigue>.3)return {status:'Rejected',reason:'Repeated inadequate offers have exhausted negotiations. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
  if(f.careerBreak)return {status:'Rejected',reason:'Currently on a career break.',request:'opponent',requestedPurse,minimumDays};
  if(days<minimumDays)return {status:'Counteroffer',reason:'Needs at least '+minimumDays+' days to prepare'+(cutting?' and safely make weight':'')+'.',request:'date',requestedPurse,minimumDays};
- if(shortNotice&&motivation<35&&competitiveness<60)return {status:'Counteroffer',reason:'Declines a short-notice camp. Requests '+preferredDays+' days to prepare.',request:'date',requestedPurse,minimumDays:preferredDays};
+ if(shortNotice&&!willingShortNotice)return {status:'Counteroffer',reason:'Not comfortable with this short-notice camp. Requests '+preferredDays+' days to prepare.',request:'date',requestedPurse,minimumDays:preferredDays};
  if(Number(terms.purse)<requestedPurse)return {status:'Counteroffer',reason:(shortNotice?'Short-notice preparation: ':'')+'Requests an additional fight guarantee of '+money(requestedPurse)+' on top of the contracted show purse.',request:'purse',requestedPurse,minimumDays};
  if(difficulty>=12&&competitiveness<65&&bargainingPower>=.55&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
  if(attempts>=patience&&fatigue>.55&&willingness<.35)return {status:'Rejected',reason:'Negotiations have dragged on too long. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
@@ -464,7 +469,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  if(!Number.isFinite(opponentPurse)||opponentPurse<0)return alert('Enter a valid opponent guaranteed purse.');
  const slot=action==='fight-accept'&&offer.request==='position'?'Co-Main Event':action==='fight-accept'?offer.slot:document.getElementById('fight-slot-'+m.id)?.value;
  if(!opponent||!eligibleFightDivision(fighter,opponent)||opponent.id===fighter.id)return alert('Select an eligible opponent in the same or adjacent weight division.');
- if(!date||date<addDays(state.date,21))return alert('Select a date at least 21 days from today.');
+ if(!date||date<addDays(state.date,7))return alert('Select a date at least 7 days from today.');
  if(!Number.isFinite(purse)||purse<0)return alert('Enter a valid guaranteed purse.');
  const existingEvent=state.events.find(x=>!x.done&&(x.date||x.day)===date);
  const targetEvent=existingEvent||null;
@@ -476,12 +481,12 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  if(![fighter.division,opponent.division].includes(weightClass))return alert('The proposed weight class is not valid for these fighters.');
  const days=Math.round((Date.parse(date)-Date.parse(state.date))/86400000);
  const cutsWeight=f=>{const ds=divisionSteps(f);return ds.indexOf(f.division)>ds.indexOf(weightClass)};
- const minimumDays=f=>cutsWeight(f)?63:35;
+ const minimumDays=f=>cutsWeight(f)?63:7;
  const agreed=offer.agreed||{};
  const unchanged=f=>{const a=agreed[f.id];return a&&String(a.opponentId)===String(f.id===fighter.id?opponent.id:fighter.id)&&a.date===date&&a.slot===slot&&a.weightClass===weightClass};
  const purseFor=f=>f.id===fighter.id?purse:opponentPurse;
  const evaluate=f=>evaluateFightOffer(f,f.id===fighter.id?opponent:fighter,{date,slot,weightClass,purse:purseFor(f),attempts:offer.attempts||0,lowballCount:offer.lowballCount||0});
- const responses=[fighter,opponent].map(f=>({fighter:f,...(unchanged(f)&&purseFor(f)>=agreed[f.id].purse?{status:'Accepted',reason:'Previously agreed terms remain unchanged.',requestedPurse:agreed[f.id].purse,minimumDays:35}:evaluate(f))}));
+ const responses=[fighter,opponent].map(f=>({fighter:f,...(unchanged(f)&&purseFor(f)>=agreed[f.id].purse?{status:'Accepted',reason:'Previously agreed terms remain unchanged.',requestedPurse:agreed[f.id].purse,minimumDays:7}:evaluate(f))}));
  const allAccepted=responses.every(x=>x.status==='Accepted');
  offer.demands=Object.fromEntries(responses.filter(x=>x.status!=='Accepted').map(x=>[x.fighter.id,{status:x.status,request:x.request,requestedPurse:x.requestedPurse,minimumDays:x.minimumDays,reason:x.reason}]));
  offer.agreed=offer.agreed||{};
