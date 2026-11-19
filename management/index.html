@@ -275,7 +275,8 @@ const PERSONALITY_FACTORS={
  loyalty:[['gymAttachment',.35],['promotionLoyalty',.40],['relationshipStability',.25]],
  adaptability:[['opennessToChange',.35],['learningAbility',.35],['tacticalFlexibility',.30]],
  resilience:[['mentalToughness',.40],['persistence',.35],['recoveryMindset',.25]],
- confidence:[['selfBelief',.50],['assertiveness',.30],['riskTolerance',.20]]
+ confidence:[['selfBelief',.50],['assertiveness',.30],['riskTolerance',.20]],
+ negotiations:[['negotiatingPower',.40],['negotiationFatigue',-.25],['compromise',.35]]
 };
 function ensureFighterPersonality(f){
  if(!f.hiddenPersonalityFactors||typeof f.hiddenPersonalityFactors!=='object')f.hiddenPersonalityFactors={};
@@ -411,6 +412,7 @@ function ensureInbox(){if(!Array.isArray(state.inbox))state.inbox=[];return stat
 function sendInboxMessage(data){const inbox=ensureInbox();if(data.key&&inbox.some(m=>m.key===data.key))return;inbox.unshift({id:'msg-'+Date.now()+'-'+Math.floor(Math.random()*100000),date:state.date,read:false,status:data.actions?'Pending':'Information',...data});if(inbox.length>250)inbox.length=250}
 function inboxView(){const all=ensureInbox();all.forEach(m=>{if(m.read&&!(m.status==='Pending'&&Array.isArray(m.actions)&&m.actions.length))m.archived=true});const archived=!!state.showArchivedInbox;const messages=all.filter(m=>archived?m.archived:!m.archived);return '<section class="panel"><h2>Inbox <span class="pill">'+all.filter(m=>!m.read&&!m.archived).length+' unread</span></h2><p class="muted">Messages requiring action remain in your inbox. Read messages with no outstanding actions are archived automatically.</p><button id="toggleInboxArchive">'+(archived?'Back to Inbox':'View Archive ('+all.filter(m=>m.archived).length+')')+'</button>'+(messages.length?messages.map(m=>'<div class="feed" style="margin-bottom:12px"><strong>'+esc(m.subject)+'</strong> <span class="muted">'+esc(m.date)+(m.read?'':' · Unread')+'</span><div class="muted">'+esc(m.sender||'Management')+' · '+esc(m.type||'Information')+'</div><p>'+esc(m.body)+'</p>'+(m.status==='Pending'&&m.actions?(m.fightOffer&&m.revising?'<div class="stack" style="margin:10px 0"><label>Fight date <input type="date" min="'+esc(addDays(state.date,21))+'" id="fight-date-'+esc(m.id)+'" value="'+esc(addDays(state.date,m.fightOffer.minimumNoticeDays||42))+'"></label><label>Guaranteed purse ($) <input type="number" min="0" step="1000" id="fight-purse-'+esc(m.id)+'" value="'+Number(m.fightOffer.requestedPurse||m.fightOffer.basePurse||10000)+'"></label><label>Card position <select id="fight-slot-'+esc(m.id)+'">'+['Main Event','Co-Main Event','Main Card','Prelims','Early Prelims'].map(slot=>'<option value="'+esc(slot)+'"'+(slot===m.fightOffer.slot?' selected':'')+'>'+esc(slot)+'</option>').join('')+'</select></label><label>Opponent <select id="fight-opponent-'+esc(m.id)+'">'+state.fighters.filter(f=>f.promotion===state.player&&f.id!==m.fighterId&&eligibleFightDivision(f,state.fighters.find(x=>x.id===m.fighterId))).map(f=>'<option value="'+f.id+'"'+(f.id===(m.fighterId===m.fightOffer.aid?m.fightOffer.bid:m.fightOffer.aid)?' selected':'')+'>'+esc(f.name)+'</option>').join('')+'</select></label></div>':'')+m.actions.map(a=>'<button data-inbox-reply="'+esc(m.id)+'" data-reply="'+esc(a.id)+'">'+esc(a.label)+'</button>').join(' '):'<span class="muted">'+esc(m.response||m.status)+'</span>')+'</div>').join(''):'<div class="empty">No messages yet.</div>')+'</section>'}
 function evaluateFightOffer(f,opponent,terms){
+ ensureFighterPersonality(f);
  const traits=f.hiddenPersonalityFactors||{},states=f.temporaryPersonalityStates||{};
  const competitiveness=Number(traits.competitiveness??50),motivation=Number(states.motivation??50),popularity=Number(f.popularity??50);
  const difficulty=Number(opponent.skill||50)-Number(f.skill||50),days=Math.max(0,Math.round((Date.parse(terms.date)-Date.parse(state.date))/86400000));
@@ -422,12 +424,17 @@ function evaluateFightOffer(f,opponent,terms){
  const bouts=Math.max(0,Number(f.wins||0)+Number(f.losses||0)+Number(f.draws||0));
  const experiencePower=Math.min(1,bouts/25),popularityPower=Math.min(1,Math.max(0,popularity)/100);
  const bargainingPower=Math.max(0,Math.min(1,rankPower*.45+popularityPower*.35+experiencePower*.20));
+ const leverage=Math.max(0,Math.min(1,bargainingPower*.75+Number(traits.negotiatingPower??50)/100*.25));
+ const attempts=Math.max(0,Number(terms.attempts||0));
+ const fatigue=Math.min(1,attempts*Number(traits.negotiationFatigue??50)/260);
+ const willingness=Number(traits.compromise??50)/100;
  const premium=Math.max(0,difficulty)*(.006+(100-competitiveness)*.00007)+Math.max(0,popularity-65)*.002;
- const requestedPurse=Math.ceil(base*(1+premium*(.25+bargainingPower*.95))/1000)*1000;
+ const requestedPurse=Math.ceil(base*(1+premium*(.25+leverage*.95)*(1-fatigue*willingness*.65))/1000)*1000;
  if(f.careerBreak)return {status:'Rejected',reason:'Currently on a career break.',request:'opponent',requestedPurse,minimumDays};
  if(days<minimumDays)return {status:'Counteroffer',reason:'Needs '+minimumDays+' days to prepare'+(cutting?' and safely make weight':'')+'.',request:'date',requestedPurse,minimumDays};
  if(Number(terms.purse)<requestedPurse)return {status:'Counteroffer',reason:'Requests a guaranteed purse of '+money(requestedPurse)+'.',request:'purse',requestedPurse,minimumDays};
  if(difficulty>=12&&competitiveness<65&&bargainingPower>=.55&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
+ if(attempts>=3&&fatigue>.55&&willingness<.35)return {status:'Rejected',reason:'Negotiations have dragged on too long. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
  if(motivation<25&&difficulty>8)return {status:'Rejected',reason:'Not interested in this opponent at present.',request:'opponent',requestedPurse,minimumDays};
  return {status:'Accepted',reason:'Agrees to the proposed terms.',request:null,requestedPurse,minimumDays,bargainingPower};
 }
@@ -458,7 +465,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  const cutsWeight=f=>{const ds=divisionSteps(f);return ds.indexOf(f.division)>ds.indexOf(weightClass)};
  const minimumDays=f=>cutsWeight(f)?63:35;
  const purseFor=f=>f.id===fighter.id?purse:Number(state.contracts.find(c=>c.id===f.id)?.show||10000);
- const evaluate=f=>evaluateFightOffer(f,f.id===fighter.id?opponent:fighter,{date,slot,weightClass,purse:purseFor(f)});
+ const evaluate=f=>evaluateFightOffer(f,f.id===fighter.id?opponent:fighter,{date,slot,weightClass,purse:purseFor(f),attempts:offer.attempts||0});
  const responses=[fighter,opponent].map(f=>({fighter:f,...evaluate(f)}));
  const allAccepted=responses.every(x=>x.status==='Accepted');
  offer.attempts=(offer.attempts||0)+1;
