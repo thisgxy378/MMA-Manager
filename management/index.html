@@ -430,12 +430,20 @@ function evaluateFightOffer(f,opponent,terms){
  const rankPower=rankIndex<0?0:Math.max(0,1-rankIndex/14);
  const bouts=Math.max(0,Number(f.wins||0)+Number(f.losses||0)+Number(f.draws||0));
  const experiencePower=Math.min(1,bouts/25),popularityPower=Math.min(1,Math.max(0,popularity)/100);
+ const opponentRankList=rankingPositions(opponent.promotion,opponent.gender||'Male',opponent.division);
+ const opponentRankIndex=opponentRankList.indexOf(opponent.id);
+ const rankGap=rankIndex>=0&&opponentRankIndex>=0?opponentRankIndex-rankIndex:rankIndex>=0?16-rankIndex:0;
+ const exposure=Math.max(0,Number(opponent.popularity||50)-popularity);
+ const careerReward=(opponentRankIndex>=0&&rankIndex>=0&&opponentRankIndex<rankIndex?Math.min(1,(rankIndex-opponentRankIndex)/10):0)*.55+Math.min(1,exposure/40)*.45;
+ const opponentRisk=Math.max(0,difficulty)/20*(1-competitiveness/160);
+ const lowReward=rankIndex>=0&&rankIndex<=7&&rankGap>=7&&exposure<15;
+ const opponentValue=careerReward-opponentRisk-(lowReward?Math.min(.55,rankGap/25):0);
  const bargainingPower=Math.max(0,Math.min(1,rankPower*.45+popularityPower*.35+experiencePower*.20));
  const leverage=Math.max(0,Math.min(1,bargainingPower*.75+Number(traits.negotiatingPower??50)/100*.25));
  const attempts=Math.max(0,Number(terms.attempts||0));
  const fatigue=Math.min(1,attempts*Number(traits.negotiationFatigue??50)/260+Math.max(0,Number(terms.lowballCount||0))*.14);
  const willingness=Number(traits.compromise??50)/100;
- const premium=Math.max(0,difficulty)*(.006+(100-competitiveness)*.00007)+Math.max(0,popularity-65)*.002;
+ const premium=Math.max(0,difficulty)*(.006+(100-competitiveness)*.00007)+Math.max(0,popularity-65)*.002+Math.max(0,-opponentValue)*.11;
  const extraDemand=Math.max(0,premium*(.25+leverage*.95)*(1-fatigue*willingness*.65));
  const exceptional=extraDemand>.12&&(difficulty>=10||popularity>=75)&&leverage>.35;
  const shortNoticePremium=shortNotice&&willingShortNotice?noticePressure*(.15+leverage*.55)*(1-willingness*.4):0;
@@ -448,9 +456,10 @@ function evaluateFightOffer(f,opponent,terms){
  if(days<minimumDays)return {status:'Counteroffer',reason:'Needs at least '+minimumDays+' days to prepare'+(cutting?' and safely make weight':'')+'.',request:'date',requestedPurse,minimumDays};
  if(shortNotice&&!willingShortNotice)return {status:'Counteroffer',reason:'Not comfortable with this short-notice camp. Requests '+preferredDays+' days to prepare.',request:'date',requestedPurse,minimumDays:preferredDays};
  if(Number(terms.purse)<requestedPurse)return {status:'Counteroffer',reason:(shortNotice?'Short-notice preparation: ':'')+'Requests an additional fight guarantee of '+money(requestedPurse)+' on top of the contracted show purse.',request:'purse',requestedPurse,minimumDays};
- if(difficulty>=12&&competitiveness<65&&bargainingPower>=.55&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
+ if(lowReward&&opponentValue<-.25&&motivation<65&&competitiveness<75&&leverage>.45)return {status:'Counteroffer',reason:'This lower-ranked matchup offers limited career upside. Requests a higher-profile opponent.',request:'opponent',requestedPurse,minimumDays};
+ if(difficulty>=12&&careerReward<.45&&competitiveness<65&&bargainingPower>=.55&&!['Main Event','Co-Main Event'].includes(terms.slot))return {status:'Counteroffer',reason:'Requests a higher card position for this difficult matchup.',request:'position',requestedPurse,minimumDays};
  if(attempts>=patience&&fatigue>.55&&willingness<.35)return {status:'Rejected',reason:'Negotiations have dragged on too long. The fighter has walked away.',request:'opponent',requestedPurse,minimumDays};
- if(motivation<25&&difficulty>8)return {status:'Rejected',reason:'Not interested in this opponent at present.',request:'opponent',requestedPurse,minimumDays};
+ if(motivation<25&&difficulty>8&&careerReward<.5)return {status:'Rejected',reason:'Not interested in this opponent at present.',request:'opponent',requestedPurse,minimumDays};
  return {status:'Accepted',reason:'Agrees to the proposed terms.',request:null,requestedPurse,minimumDays,bargainingPower};
 }
 function saturdayFromDate(date){const day=new Date(date+'T12:00:00').getDay();return addDays(date,(6-day+7)%7)}
