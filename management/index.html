@@ -894,7 +894,7 @@ function migrate(){if(!state)return;initializeChampionships();expandUFCRoster();
 function socialInit(){
  if(!state)return;
  state.social??={posts:[],rivalries:{},fanbases:{},lastWeek:''};
- state.social.posts??=[];state.social.rivalries??={};state.social.fanbases??={};
+ state.social.posts??=[];state.social.posts=state.social.posts.filter(p=>!/(?:scout(?:ing)? report|scout report completed|scouting team|scouting network|detailed reports)/i.test([p.headline,p.body].join(' ')));state.social.rivalries??={};state.social.fanbases??={};
  for(const p of [...Object.keys(PROMOS),...REGION])state.social.fanbases[p]??={prestige:PROMOS[p]?.prestige??35,fans:Math.round((PROMOS[p]?.prestige??35)*11000)};
 }
 function socialHash(t){let n=2166136261;for(const c of String(t))n=Math.imul(n^c.charCodeAt(0),16777619);return(n>>>0)/4294967296}
@@ -958,7 +958,7 @@ function titleManagement(p,g,d,t){
 }
 
 function save(){try{localStorage.setItem('mma_gm_management_v01',JSON.stringify(state))}catch(e){}}
-function log(t){state.news.unshift(t);state.news=state.news.slice(0,35);if(state.social&&/booked|completed|signs |champion|defeat/i.test(t))socialPost('News',t.slice(0,90),t,{key:'news-'+state.date+'-'+t})}
+function log(t){state.news.unshift(t);state.news=state.news.slice(0,35);if(state.social&&!/(?:scout|scouting|report)/i.test(t)&&/booked|completed|signs |champion|defeat/i.test(t))socialPost('News',t.slice(0,90),t,{key:'news-'+state.date+'-'+t})}
 let pendingRoster=null,rosterImportError='';
 function parseRosterCSV(source){
  const rows=[];let row=[],cell='',quoted=false;
