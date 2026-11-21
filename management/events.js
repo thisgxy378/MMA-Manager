@@ -82,7 +82,11 @@ function fighterRelationshipProfile(f){
  const promotion=typeof promotionTrust==='function'?promotionTrust(f):0;
  const manager=typeof managementTrust==='function'?managementTrust(f):0;
  const related=state.fighters.filter(x=>x.id!==f.id&&x.promotion===f.promotion&&typeof fighterRelationship==='function'&&Math.abs(fighterRelationship(f,x))>=25).sort((a,b)=>Math.abs(fighterRelationship(f,b))-Math.abs(fighterRelationship(f,a))).slice(0,6);
- return '<section class="panel" style="margin-top:14px"><h3>Morale & Relationships</h3><div class="roster-bio-facts">'+[['Morale',morale+'/100'],['Promotion relationship',promotion],['Management trust',manager]].map(([k,v])=>'<div class="roster-bio-fact"><span class="muted">'+esc(k)+'</span><strong>'+esc(String(v))+'</strong></div>').join('')+'</div><h4>Fighter relationships</h4>'+(related.length?related.map(x=>'<div class="feed">'+esc(x.name)+' · '+esc(fighterRelationshipStatus(f,x))+' ('+fighterRelationship(f,x)+')</div>').join(''):'<div class="muted">No significant relationships recorded yet.</div>')+'</section>';
+ return '<section class="panel" style="margin-top:14px"><h3>Morale & Relationships</h3><div class="roster-bio-facts">'+[['Morale',morale+'/100'],['Promotion relationship',relationshipText(promotion)],['Management trust',relationshipText(manager)]].map(([k,v])=>'<div class="roster-bio-fact"><span class="muted">'+esc(k)+'</span><strong>'+esc(String(v))+'</strong></div>').join('')+'</div><h4>Fighter relationships</h4>'+(related.length?related.map(x=>'<div class="feed">'+esc(x.name)+' · '+esc(fighterRelationshipStatus(f,x))+' ('+fighterRelationship(f,x)+')</div>').join(''):'<div class="muted">No significant relationships recorded yet.</div>')+'</section>';
+}
+function relationshipText(value){
+ const n=Math.max(0,Math.min(100,Number(value)||0));
+ return n<=15?'Hostile':n<=35?'Negative / Dislike':n<=64?'Neutral':n<=84?'Positive / Friendly':'Very positive / Close friends';
 }
 function rosterBioTabContent(f,tab){
  const c=(state.contracts||[]).find(x=>x.id===f.id);
@@ -101,8 +105,8 @@ function rosterBioTabContent(f,tab){
    .sort((a,b)=>b.value-a.value).map(x=>{const other=state.fighters.find(g=>x.ids.some(id=>String(id)===String(g.id))&&g.id!==f.id);
     return other?'<div class="feed"><strong>'+esc(other.name)+'</strong> <span class="pill">Rivalry '+Math.round(x.value)+'/100</span><div class="muted">'+esc(x.reason||'Active rivalry')+'</div></div>':''}).join('');
   const peerRows=peers.map(x=>{const relation=r.fighters?.[typeof fighterPairKey==='function'?fighterPairKey(f,x):'']||{};
-   return '<div class="feed"><strong>'+esc(x.name)+'</strong> <span class="pill">'+esc(fighterRelationshipStatus(f,x))+'</span> <span class="muted">('+fighterRelationship(f,x)+')</span><div class="muted">'+esc(relation.reason||'Relationship developed over time')+'</div></div>'}).join('');
-  return '<h3>Promotion & Management</h3>'+rows([['Morale',morale+'/100'],['Promotion relationship',promotion],['Management trust',management]])+
+   return '<div class="feed"><strong>'+esc(x.name)+'</strong> <span class="pill">'+esc(fighterRelationshipStatus(f,x))+'</span><div class="muted">'+esc(relation.reason||'Relationship developed over time')+'</div></div>'}).join('');
+  return '<h3>Promotion & Management</h3>'+rows([['Morale',morale+'/100'],['Promotion relationship',relationshipText(promotion)],['Management trust',relationshipText(management)]])+
    '<h3 style="margin-top:18px">Fighter Relationships</h3>'+(peerRows||'<div class="empty">No significant friendships or disagreements recorded yet.</div>')+
    '<h3 style="margin-top:18px">Active Rivalries</h3>'+(rivalRows||'<div class="empty">No active rivalries.</div>')+
    '<p class="muted" style="margin-top:12px">Friendships can reduce fight acceptance. Rivalries may end after a decisive result or intensify following a close decision.</p>';
