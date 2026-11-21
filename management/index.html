@@ -1049,8 +1049,14 @@ function relationshipClamp(n){return Math.max(-100,Math.min(100,Math.round(n)))}
 function fighterPairKey(a,b){return [a.id,b.id].sort((x,y)=>Number(x)-Number(y)).join(':')}
 function fighterRelationship(a,b){return a&&b&&a.id!==b.id?Number(relationshipStore().fighters[fighterPairKey(a,b)]?.score||0):0}
 function changeFighterRelationship(a,b,delta,reason){if(!a||!b||a.id===b.id)return;const store=relationshipStore().fighters,key=fighterPairKey(a,b),old=store[key]||{score:0};store[key]={score:relationshipClamp(old.score+delta),lastDate:state.date,reason};}
-function promotionTrust(f){return Number(relationshipStore().promotions[f.id]??0)}
-function managementTrust(f){return Number(relationshipStore().management[f.id]??0)}
+function initialRelationshipScore(f,kind){
+ const scores=ensureFighterPersonality(f),states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors||{};
+ const loyalty=Number(traits.promotionLoyalty??scores.loyalty??50),morale=Number(states.morale??50);
+ // Neutral-to-positive starting relationships, influenced by existing personality and morale.
+ return relationshipClamp(Math.max(-25,Math.min(65,Math.round(20+(loyalty-50)*.30+(morale-50)*.25+(kind==='management'?-3:0)))));
+}
+function promotionTrust(f){const r=relationshipStore().promotions;if(!Object.prototype.hasOwnProperty.call(r,f.id))r[f.id]=initialRelationshipScore(f,'promotion');return Number(r[f.id])}
+function managementTrust(f){const r=relationshipStore().management;if(!Object.prototype.hasOwnProperty.call(r,f.id))r[f.id]=initialRelationshipScore(f,'management');return Number(r[f.id])}
 function changeFighterTrust(f,promotionDelta,managementDelta,reason){if(!f)return;const r=relationshipStore();r.promotions[f.id]=relationshipClamp(promotionTrust(f)+promotionDelta);r.management[f.id]=relationshipClamp(managementTrust(f)+managementDelta);f.lastRelationshipEvent={date:state.date,reason};}
 function fighterRelationshipStatus(a,b){const n=fighterRelationship(a,b);return n>=65?'Close friends':n>=25?'Friendly':n<=-65?'Hostile':n<=-25?'Dislike':'Neutral'}
 function fighterRelationshipFightModifier(a,b,terms){
