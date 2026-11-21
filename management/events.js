@@ -75,7 +75,7 @@ function fighterBioHTML(id){
  return '<h3 style="margin:0 0 10px">'+esc(f.name)+'</h3><div class="event-fields">'+items.map(([label,value])=>'<div class="feed"><span class="muted">'+esc(label)+'</span><div><strong>'+esc(String(value))+'</strong></div></div>').join('')+'</div>'+gymPanel+divisionControl+attributePanel+hiddenPanel;
 }
 
-const ROSTER_BIO_TABS=[['information','Information'],['attributes','Attributes'],['personality','Personality'],['history','Fight History'],['career','Career'],['contract','Contract']];
+const ROSTER_BIO_TABS=[['information','Information'],['attributes','Attributes'],['personality','Personality'],['relationships','Relationships'],['history','Fight History'],['career','Career'],['contract','Contract']];
 function fighterRelationshipProfile(f){
  if(f.promotion!==state.player)return '';
  const morale=Math.round(Number(ensurePersonalityStates(f).morale||50));
@@ -88,7 +88,25 @@ function rosterBioTabContent(f,tab){
  const c=(state.contracts||[]).find(x=>x.id===f.id);
  const rows=entries=>'<div class="roster-bio-facts">'+entries.map(([k,v])=>'<div class="roster-bio-fact"><span class="muted">'+esc(k)+'</span><strong>'+(k==='Loyalty'&&tab==='personality'?v:esc(v==null||v===''?'Not recorded':String(v)))+'</strong></div>').join('')+'</div>';
  const bar=n=>'<div class="bar"><i style="width:'+Math.max(0,Math.min(100,Number(n)||0))+'%"></i></div>';
- if(tab==='information')return rows([['Name',f.name],['Nationality',f.nationality],['Age',f.age],['Gender',f.gender],['Height',f.height],['Weight',f.weight],['Reach',f.reach],['Division',f.division],['Promotion',f.promotion],['Professional status',f.status],['Fighting style',FIGHTING_STYLES[ensureFightingStyle(f)]?.label],['Gym',ensureFighterGym(f).name],['Record',f.status==='Amateur'?((f.amateurWins||0)+'-'+(f.amateurLosses||0)+' amateur'):((f.wins||0)+'-'+(f.losses||0)+'-'+(f.draws||0)+' ('+(f.noContests||0)+' NC)')]])+fighterRelationshipProfile(f)+(f.promotion===state.player?'<div class="row" style="margin-top:16px"><label>Change division <select data-change-division="'+f.id+'"><option value="">Select adjacent division</option>'+divisionSteps(f).filter(d=>Math.abs(divisionSteps(f).indexOf(d)-divisionSteps(f).indexOf(f.division))===1).map(d=>'<option>'+esc(d)+'</option>').join('')+'</select></label></div>':'');
+ if(tab==='information')return rows([['Name',f.name],['Nationality',f.nationality],['Age',f.age],['Gender',f.gender],['Height',f.height],['Weight',f.weight],['Reach',f.reach],['Division',f.division],['Promotion',f.promotion],['Professional status',f.status],['Fighting style',FIGHTING_STYLES[ensureFightingStyle(f)]?.label],['Gym',ensureFighterGym(f).name],['Record',f.status==='Amateur'?((f.amateurWins||0)+'-'+(f.amateurLosses||0)+' amateur'):((f.wins||0)+'-'+(f.losses||0)+'-'+(f.draws||0)+' ('+(f.noContests||0)+' NC)')]])+(f.promotion===state.player?'<div class="row" style="margin-top:16px"><label>Change division <select data-change-division="'+f.id+'"><option value="">Select adjacent division</option>'+divisionSteps(f).filter(d=>Math.abs(divisionSteps(f).indexOf(d)-divisionSteps(f).indexOf(f.division))===1).map(d=>'<option>'+esc(d)+'</option>').join('')+'</select></label></div>':'');
+ if(tab==='relationships'){
+  const r=typeof relationshipStore==='function'?relationshipStore():{fighters:{},promotions:{},management:{}};
+  const morale=Math.round(Number(ensurePersonalityStates(f).morale??50));
+  const promotion=typeof promotionTrust==='function'?promotionTrust(f):0;
+  const management=typeof managementTrust==='function'?managementTrust(f):0;
+  const peers=state.fighters.filter(x=>x.id!==f.id&&typeof fighterRelationship==='function'&&Math.abs(fighterRelationship(f,x))>=25)
+   .sort((a,b)=>Math.abs(fighterRelationship(f,b))-Math.abs(fighterRelationship(f,a)));
+  const rivals=state.social?.rivalries||{};
+  const rivalRows=Object.values(rivals).filter(x=>x.ids?.some(id=>String(id)===String(f.id))&&x.value>0)
+   .sort((a,b)=>b.value-a.value).map(x=>{const other=state.fighters.find(g=>x.ids.some(id=>String(id)===String(g.id))&&g.id!==f.id);
+    return other?'<div class="feed"><strong>'+esc(other.name)+'</strong> <span class="pill">Rivalry '+Math.round(x.value)+'/100</span><div class="muted">'+esc(x.reason||'Active rivalry')+'</div></div>':''}).join('');
+  const peerRows=peers.map(x=>{const relation=r.fighters?.[typeof fighterPairKey==='function'?fighterPairKey(f,x):'']||{};
+   return '<div class="feed"><strong>'+esc(x.name)+'</strong> <span class="pill">'+esc(fighterRelationshipStatus(f,x))+'</span> <span class="muted">('+fighterRelationship(f,x)+')</span><div class="muted">'+esc(relation.reason||'Relationship developed over time')+'</div></div>'}).join('');
+  return '<h3>Promotion & Management</h3>'+rows([['Morale',morale+'/100'],['Promotion relationship',promotion],['Management trust',management]])+
+   '<h3 style="margin-top:18px">Fighter Relationships</h3>'+(peerRows||'<div class="empty">No significant friendships or disagreements recorded yet.</div>')+
+   '<h3 style="margin-top:18px">Active Rivalries</h3>'+(rivalRows||'<div class="empty">No active rivalries.</div>')+
+   '<p class="muted" style="margin-top:12px">Friendships can reduce fight acceptance. Rivalries may end after a decisive result or intensify following a close decision.</p>';
+ }
  if(tab==='attributes'){const a=ensureFighterAttributes(f);return '<div class="roster-bio-attribute-groups">'+attributeGroups(f).map(g=>'<details class="panel" style="padding:12px"><summary><strong>'+esc(g.label)+'</strong><span>'+g.rating+'</span></summary>'+bar(g.rating)+'<div class="roster-bio-facts">'+(g.disciplines?g.disciplines.flatMap(d=>d.skills):g.skills).map(([key,label])=>'<div class="roster-bio-fact"><span>'+esc(label)+'</span><strong>'+a[key]+'</strong>'+bar(a[key])+'</div>').join('')+'</div></details>').join('')+'</div>';}
  if(tab==='personality'){
   const scores=ensureFighterPersonality(f);
