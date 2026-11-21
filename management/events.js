@@ -86,7 +86,7 @@ function fighterRelationshipProfile(f){
 }
 function relationshipText(value){
  const n=Math.max(0,Math.min(100,Number(value)||0));
- return n<=15?'Hostile':n<=35?'Negative / Dislike':n<=64?'Neutral':n<=84?'Positive / Friendly':'Very positive / Close friends';
+ return n<=15?'Hostile':n<=35?'Dislike':n<=64?'Neutral':n<=84?'Positive':'Friends';
 }
 function rosterBioTabContent(f,tab){
  const c=(state.contracts||[]).find(x=>x.id===f.id);
