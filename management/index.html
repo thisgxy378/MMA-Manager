@@ -463,7 +463,7 @@ function evaluateFightOffer(f,opponent,terms){
  return {status:'Accepted',reason:'Agrees to the proposed terms.',request:null,requestedPurse,minimumDays,bargainingPower};
 }
 function saturdayFromDate(date){const day=new Date(date+'T12:00:00').getDay();return addDays(date,(6-day+7)%7)}
-function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id);if(!m||m.status!=='Pending')return;if(m.fightOffer){
+function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id);if(!m||m.status!=='Pending')return;if(m.requestKind&&action.startsWith('request-'))return answerFighterRequest(m,action);if(m.fightOffer){
  const offer=m.fightOffer;
  if(action==='fight-close'){m.status='Closed';m.response='Offer withdrawn.';m.read=true;save();render();return}
  if(action==='fight-revise'&&!m.revising){m.revising=true;m.actions=[{id:'fight-revise',label:'Submit revised offer'},{id:'fight-close',label:'Withdraw offer'}];save();render();return}
@@ -1042,6 +1042,75 @@ function view(){switch(tab){case'Overview':return overview();case'My Roster':ret
 // Fighter promise ledger: persisted with career saves; deadlines follow the in-game calendar.
 let overviewPane='priorities',promiseHistoryVisible=false;
 const PROMISE_KINDS={fight:'Arrange a fight',ranked:'Offer a higher-ranked opponent',title:'Offer a championship fight'};
+
+/* Mechanic 1.4: persistent relationships, career requests and proportionate promises. */
+function relationshipStore(){if(!state.relationships||typeof state.relationships!=='object')state.relationships={fighters:{},promotions:{},management:{}};return state.relationships}
+function relationshipClamp(n){return Math.max(-100,Math.min(100,Math.round(n)))}
+function fighterPairKey(a,b){return [a.id,b.id].sort((x,y)=>Number(x)-Number(y)).join(':')}
+function fighterRelationship(a,b){return a&&b&&a.id!==b.id?Number(relationshipStore().fighters[fighterPairKey(a,b)]?.score||0):0}
+function changeFighterRelationship(a,b,delta,reason){if(!a||!b||a.id===b.id)return;const store=relationshipStore().fighters,key=fighterPairKey(a,b),old=store[key]||{score:0};store[key]={score:relationshipClamp(old.score+delta),lastDate:state.date,reason};}
+function promotionTrust(f){return Number(relationshipStore().promotions[f.id]??0)}
+function managementTrust(f){return Number(relationshipStore().management[f.id]??0)}
+function changeFighterTrust(f,promotionDelta,managementDelta,reason){if(!f)return;const r=relationshipStore();r.promotions[f.id]=relationshipClamp(promotionTrust(f)+promotionDelta);r.management[f.id]=relationshipClamp(managementTrust(f)+managementDelta);f.lastRelationshipEvent={date:state.date,reason};}
+function fighterRelationshipStatus(a,b){const n=fighterRelationship(a,b);return n>=65?'Close friends':n>=25?'Friendly':n<=-65?'Hostile':n<=-25?'Dislike':'Neutral'}
+function fighterRelationshipFightModifier(a,b,terms){
+ const score=fighterRelationship(a,b);if(score<25)return null;
+ const isTitle=!!terms.title,highReward=isTitle||terms.slot==='Main Event';
+ if(score>=65&&!highReward)return {status:'Counteroffer',reason:'Close friends are reluctant to fight unless there is a compelling career opportunity.',request:'opponent',requestedPurse:0,minimumDays:7};
+ if(score>=25&&!highReward&&socialHash('friends|'+a.id+'|'+b.id+'|'+terms.date)<Math.min(.65,score/140))return {status:'Counteroffer',reason:'Prefers not to compete against a friend without a significant opportunity.',request:'opponent',requestedPurse:0,minimumDays:7};
+ return null;
+}
+function resolveFightRivalry(a,b,method,decisionType){
+ if(!a||!b)return;
+ const key=fighterPairKey(a,b),r=state.social?.rivalries?.[key],close=/Split|Majority|Draw/i.test(decisionType||method);
+ if(close){
+  changeFighterRelationship(a,b,-7,'Close or controversial fight');
+  increaseRivalry(a,b,Math.max(15,30-Number(r?.value||0)*.08),'Disputed result — rematch interest');
+  if(r){r.resolved=false;r.lastResult=decisionType||method}
+  socialPost('Fans','Rematch debate: '+a.name+' vs '+b.name,'A competitive result has fans debating a rematch.',{key:'rematch-'+state.date+'-'+key});
+ }else{
+  if(r){r.value=0;r.resolved=true;r.resolvedDate=state.date;r.lastResult=decisionType||method}
+  changeFighterRelationship(a,b,5,'Respect after decisive result');
+ }
+}
+function fighterCareerRequestTick(){
+ if(!state.fighterRequests||typeof state.fighterRequests!=='object')state.fighterRequests={};
+ for(const f of state.fighters.filter(x=>x.promotion===state.player&&x.status!=='Retired')){
+  ensurePersonalityStates(f);
+  const last=state.fighterRequests[f.id]||{},elapsed=last.date?Math.round((Date.parse(state.date)-Date.parse(last.date))/86400000):999;
+  if(elapsed<42)continue;
+  const days= Math.round((Date.parse(state.date)-Date.parse(f.lastRankingFightDate||f.lastFightDate||'2026-01-05'))/86400000);
+  const morale=Number(f.temporaryPersonalityStates.morale??50),trust=managementTrust(f);
+  const ranking=rankingPositions(f.promotion,f.gender||'Male',f.division).indexOf(f.id);
+  const open=promiseLedger().some(p=>p.status==='Active'&&String(p.fighterId)===String(f.id));
+  if(open)continue;
+  let kind=null;
+  if(days>210)kind='fight';
+  else if(ranking>=0&&ranking<=3&&Number(f.winStreak||0)>=3)kind='title';
+  else if(Number(f.winStreak||0)>=3&&ranking>3)kind='ranked';
+  else if(morale<30&&trust<-25)kind='concern';
+  if(!kind)continue;
+  const subject=kind==='fight'?'Request for a fight':kind==='title'?'Championship opportunity request':kind==='ranked'?'Request for a ranked opponent':'Concern about career management';
+  const body=kind==='fight'?'I have been inactive for too long and want a fight.':kind==='title'?'My recent results have earned me a chance at the title.':kind==='ranked'?'I want a higher-ranked opponent to progress.':'I am unhappy with how my career has been handled.';
+  const id='request-'+f.id+'-'+state.date;
+  sendInboxMessage({key:id,fighterId:f.id,sender:f.name,type:'Fighter Request',subject,body,status:'Pending',requestKind:kind,actions:[{id:'request-promise',label:'Make a timed promise'},{id:'request-explain',label:'Explain the situation'},{id:'request-decline',label:'Decline request'}]});
+  state.fighterRequests[f.id]={date:state.date,kind};
+ }
+}
+function answerFighterRequest(m,action){
+ const f=state.fighters.find(x=>String(x.id)===String(m.fighterId));if(!f)return;
+ if(action==='request-promise'){
+  const kind=m.requestKind==='concern'?'fight':m.requestKind;
+  const days=kind==='title'?120:kind==='ranked'?90:60;
+  promiseLedger().push({id:'promise-'+Date.now()+'-'+f.id,fighterId:f.id,kind,description:PROMISE_KINDS[kind],created:state.date,deadline:addDays(state.date,days),status:'Active',sourceMessageId:m.id});
+  changeFighterMorale(f,3,'Management committed to career opportunity');changeFighterTrust(f,1,4,'Promise made');
+  m.response='Management promised: '+PROMISE_KINDS[kind]+' within '+days+' days.';
+ }else if(action==='request-explain'){changeFighterTrust(f,0,1,'Management explained the situation');m.response='The manager explained the situation without making a commitment.'}
+ else if(action==='request-decline'){changeFighterMorale(f,-3,'Career request declined');changeFighterTrust(f,-1,-4,'Career request declined');m.response='Request declined.'}
+ else return;
+ m.status='Resolved';m.read=true;m.actions=[];save();render();
+}
+
 function promiseLedger(){if(!Array.isArray(state.promises))state.promises=[];return state.promises}
 function promiseDaysLeft(p){return Math.round((new Date(p.deadline+'T12:00:00Z')-new Date(state.date+'T12:00:00Z'))/86400000)}
 function promiseFighter(p){return state.fighters.find(f=>String(f.id)===String(p.fighterId))}
@@ -1062,8 +1131,8 @@ function promiseSatisfied(p){
 function updatePromises(){
  for(const p of promiseLedger()){
   if(p.status!=='Active')continue;
-  if(promiseSatisfied(p)){p.status='Fulfilled';p.resolved=state.date;continue}
-  if(promiseDaysLeft(p)<0){p.status='Broken';p.resolved=state.date;sendInboxMessage({key:'promise-broken-'+p.id,sender:'Management',subject:'Promise deadline missed',body:(promiseFighter(p)?.name||'A fighter')+': '+p.description+'. Management trust may be affected when the morale system is introduced.'})}
+  if(promiseSatisfied(p)){p.status='Fulfilled';p.resolved=state.date;const f=promiseFighter(p);if(f){changeFighterMorale(f,6,'Promise fulfilled');changeFighterTrust(f,3,9,'Promise fulfilled')}continue}
+  if(promiseDaysLeft(p)<0){p.status='Broken';p.resolved=state.date;const f=promiseFighter(p);if(f){changeFighterMorale(f,-8,'Promise broken');changeFighterTrust(f,-4,-13,'Promise broken')}sendInboxMessage({key:'promise-broken-'+p.id,sender:'Management',subject:'Promise deadline missed',body:(promiseFighter(p)?.name||'A fighter')+': '+p.description+'. Management trust may be affected when the morale system is introduced.'})}
   else if(promiseDaysLeft(p)<=7&&!p.reminded){p.reminded=true;sendInboxMessage({key:'promise-due-'+p.id,sender:'Management',subject:'Fighter promise approaching deadline',body:(promiseFighter(p)?.name||'A fighter')+': '+p.description+' — due '+p.deadline+'.'})}
  }
 }
@@ -1252,7 +1321,7 @@ function bind(){const sf=$('socialFilter');if(sf)sf.onchange=()=>{state.socialFi
  });document.querySelectorAll('[data-scout]').forEach(b=>b.onclick=()=>{let f=state.fighters.find(x=>x.id==b.dataset.scout);if(!f||state.scoutTokens<1||f.scouted>=2)return;f.scouted++;state.scoutTokens--;log(`Scout report completed: ${f.name} (${f.promotion}), ${f.division}.`);save();render()});document.querySelectorAll('[data-sign]').forEach(b=>b.onclick=()=>negotiate(Number(b.dataset.sign)));if($('region'))$('region').onchange=e=>{state.selectedRegion=e.target.value;save();render()};if($('division'))$('division').onchange=e=>{state.selectedDivision=e.target.value;save();render()};if($('fighterStatus'))$('fighterStatus').onchange=e=>{state.selectedStatus=e.target.value;save();render()};if($('nationality'))$('nationality').onchange=e=>{state.selectedNationality=e.target.value;save();render()};if(false&&$('book'))$('book').onclick=()=>{let a=state.fighters.find(f=>f.id==$('fightA').value),b=state.fighters.find(f=>f.id==$('fightB').value);if(!a||!b||a.id===b.id)return alert('Select two different fighters.');if(a.status!=='Professional'||b.status!=='Professional')return alert('Professional events require professional fighters.');if(!sameFightDivision(a,b))return alert('Fighters must share a gender and weight division.');if(state.events.some(e=>!e.done&&[e.a,e.b].some(n=>n===a.name||n===b.name)))return alert('One fighter is already booked.');let name=$('eventName').value.trim().slice(0,60)||`${state.player} Fight Night`;state.events.push({name,a:a.name,b:b.name,aid:a.id,bid:b.id,week:state.week+2,date:addDays(state.date,14),done:false});log(`Booked ${name}: ${a.name} vs ${b.name}.`);save();render()}}
 function advance(days=1){if(state.events.some(e=>!e.done&&eventDate(e)<=state.date)){tab='Events';render();return}for(let day=0;day<days;day++){state.date=addDays(state.date,1);let d=currentDate();state.year=d.getUTCFullYear();state.week=now();const monday=d.getUTCDay()===1;if(monday){let roster=state.fighters.filter(f=>f.promotion===state.player);state.cash-=15000+roster.length*1500;if(state.week%4===0){state.scoutTokens+=8;log('Scouting team replenished eight detailed reports.')}}
 if(d.getUTCMonth()===0&&d.getUTCDate()===1)state.fighters.forEach(f=>{f.age=(Number(f.age)||25)+1});
-if(d.getUTCDay()===1){weeklyWorldTick(true);socialWeekly()}if(state.events.some(e=>!e.done&&eventDate(e)===state.date)){tab='Events';break}}updatePromises();save();render()}
+if(d.getUTCDay()===1){weeklyWorldTick(true);socialWeekly();fighterCareerRequestTick()}if(state.events.some(e=>!e.done&&eventDate(e)===state.date)){tab='Events';break}}updatePromises();save();render()}
 function weeklyWorldTick(monday){if(monday)state.fighters.forEach(f=>{if(f.status!=='Retired'){recoverFighterDevelopment(f);personalityWeeklyUpdate(f);updateMoraleRecoveryBreak(f);updateCareerBreak(f);fighterCareerAI(f)}});if(monday&&state.week%2===0){let groups=REGION.filter(r=>state.fighters.filter(f=>f.promotion===r).length>=2);if(groups.length){let region=groups[rand(0,groups.length-1)],pool=state.fighters.filter(f=>f.promotion===region);let a=pool[rand(0,pool.length-1)],b=pool.filter(f=>f.id!==a.id&&f.status===a.status&&sameFightDivision(f,a)).sort((x,y)=>Math.abs(x.skill-a.skill)-Math.abs(y.skill-a.skill))[0];if(b){let w=Math.random()<Math.max(.08,Math.min(.92,.5+(matchupRating(a,b)-matchupRating(b,a))/110))?a:b,l=w===a?b:a;recordRankingResult(w,l,'Decision',region==='Streetbeefs');if(region==='Streetbeefs'){w.amateurWins++;l.amateurLosses++}else{w.wins++;l.losses++}if(Math.random()<.3){const a=ensureFighterAttributes(w);const k=FIGHTER_ATTRIBUTES[rand(0,FIGHTER_ATTRIBUTES.length-1)][0];a[k]=Math.min(99,a[k]+5);syncFighterAbility(w)}updateFighterDevelopment(w,true,'Decision',rand(5,25),l);updateFighterDevelopment(l,false,'Decision',rand(10,35),w);let result=`${region}: ${w.name} def. ${l.name} (${region==='Streetbeefs'?`${w.amateurWins}-${w.amateurLosses} AM`:`${w.wins}-${w.losses} PRO`})`;state.aiResults.unshift(result);log(result)}}}
 if(monday&&state.week%6===0){let pool=state.fighters.filter(f=>REGION.includes(f.promotion));if(pool.length){let f=pool[rand(0,pool.length-1)],rivals=Object.keys(PROMOS).filter(p=>p!==state.player);let destination=rivals[rand(0,rivals.length-1)],old=f.promotion;if(f.status==='Amateur'){f.status='Professional';log(`${f.name} turns professional after ${f.amateurWins}-${f.amateurLosses} amateur bouts.`)}f.promotion=destination;log(`${destination} signs ${f.name} from ${old}.`)}}
 for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let f=state.fighters.find(x=>x.id===c.id);if(f&&f.promotion===state.player){f.promotion='Free Agent';log(`${f.name}'s contract expires. Fighter enters free agency.`)}state.contracts=state.contracts.filter(x=>x!==c)}}}
