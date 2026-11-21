@@ -1058,7 +1058,7 @@ function initialRelationshipScore(f,kind){
 function promotionTrust(f){const r=relationshipStore().promotions;if(!Object.prototype.hasOwnProperty.call(r,f.id))r[f.id]=initialRelationshipScore(f,'promotion');return Number(r[f.id])}
 function managementTrust(f){const r=relationshipStore().management;if(!Object.prototype.hasOwnProperty.call(r,f.id))r[f.id]=initialRelationshipScore(f,'management');return Number(r[f.id])}
 function changeFighterTrust(f,promotionDelta,managementDelta,reason){if(!f)return;const r=relationshipStore();r.promotions[f.id]=relationshipClamp(promotionTrust(f)+promotionDelta);r.management[f.id]=relationshipClamp(managementTrust(f)+managementDelta);f.lastRelationshipEvent={date:state.date,reason};}
-function fighterRelationshipStatus(a,b){const n=fighterRelationship(a,b);return n>=85?'Close friends':n>=65?'Friendly':n<=15?'Hostile':n<=35?'Dislike':'Neutral'}
+function fighterRelationshipStatus(a,b){const n=fighterRelationship(a,b);return n>=85?'Friends':n>=65?'Positive':n<=15?'Hostile':n<=35?'Dislike':'Neutral'}
 function fighterRelationshipFightModifier(a,b,terms){
  const score=fighterRelationship(a,b);if(score<65)return null;
  const isTitle=!!terms.title,highReward=isTitle||terms.slot==='Main Event';
