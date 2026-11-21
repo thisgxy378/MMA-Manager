@@ -1124,7 +1124,7 @@ function promiseSatisfied(p){
   if(booked<p.created||booked>p.deadline)return false;
   if(p.kind==='fight')return true;
   if(p.kind==='title')return !!(bout.titleFight||bout.isTitleFight||bout.championship||bout.title);
-  if(p.kind==='ranked'){const opponent=state.fighters.find(f=>ids.includes(String(f.id))&&String(f.id)!==String(p.fighterId));return !!opponent&&Number(opponent.ranking)>0&&Number(fighter.ranking)>0&&Number(opponent.ranking)<Number(fighter.ranking)}
+  if(p.kind==='ranked'){const opponent=state.fighters.find(f=>ids.includes(String(f.id))&&String(f.id)!==String(p.fighterId));if(!opponent)return false;const ranks=rankingPositions(fighter.promotion,fighter.gender||'Male',fighter.division),own=ranks.indexOf(fighter.id),theirs=ranks.indexOf(opponent.id);return own>=0&&theirs>=0&&theirs<own}
   return false;
  });
 }
