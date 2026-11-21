@@ -81,7 +81,7 @@ function fighterRelationshipProfile(f){
  const morale=Math.round(Number(ensurePersonalityStates(f).morale||50));
  const promotion=typeof promotionTrust==='function'?promotionTrust(f):0;
  const manager=typeof managementTrust==='function'?managementTrust(f):0;
- const related=state.fighters.filter(x=>x.id!==f.id&&x.promotion===f.promotion&&typeof fighterRelationship==='function'&&Math.abs(fighterRelationship(f,x))>=25).sort((a,b)=>Math.abs(fighterRelationship(f,b))-Math.abs(fighterRelationship(f,a))).slice(0,6);
+ const related=state.fighters.filter(x=>x.id!==f.id&&x.promotion===f.promotion&&typeof fighterRelationship==='function'&&Math.abs(fighterRelationship(f,x))>=25).sort((a,b)=>Math.abs(fighterRelationship(f,b)-50)-Math.abs(fighterRelationship(f,a)-50)).slice(0,6);
  return '<section class="panel" style="margin-top:14px"><h3>Morale & Relationships</h3><div class="roster-bio-facts">'+[['Morale',morale+'/100'],['Promotion relationship',relationshipText(promotion)],['Management trust',relationshipText(manager)]].map(([k,v])=>'<div class="roster-bio-fact"><span class="muted">'+esc(k)+'</span><strong>'+esc(String(v))+'</strong></div>').join('')+'</div><h4>Fighter relationships</h4>'+(related.length?related.map(x=>'<div class="feed">'+esc(x.name)+' · '+esc(fighterRelationshipStatus(f,x))+' ('+fighterRelationship(f,x)+')</div>').join(''):'<div class="muted">No significant relationships recorded yet.</div>')+'</section>';
 }
 function relationshipText(value){
@@ -98,7 +98,7 @@ function rosterBioTabContent(f,tab){
   const morale=Math.round(Number(ensurePersonalityStates(f).morale??50));
   const promotion=typeof promotionTrust==='function'?promotionTrust(f):0;
   const management=typeof managementTrust==='function'?managementTrust(f):0;
-  const peers=state.fighters.filter(x=>x.id!==f.id&&typeof fighterRelationship==='function'&&Math.abs(fighterRelationship(f,x))>=25)
+  const peers=state.fighters.filter(x=>x.id!==f.id&&typeof fighterRelationship==='function'&&fighterRelationshipStatus(f,x)!=='Neutral')
    .sort((a,b)=>Math.abs(fighterRelationship(f,b))-Math.abs(fighterRelationship(f,a)));
   const rivals=state.social?.rivalries||{};
   const rivalRows=Object.values(rivals).filter(x=>x.ids?.some(id=>String(id)===String(f.id))&&x.value>0)
