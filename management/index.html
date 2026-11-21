@@ -1044,26 +1044,26 @@ let overviewPane='priorities',promiseHistoryVisible=false;
 const PROMISE_KINDS={fight:'Arrange a fight',ranked:'Offer a higher-ranked opponent',title:'Offer a championship fight'};
 
 /* Mechanic 1.4: persistent relationships, career requests and proportionate promises. */
-function relationshipStore(){if(!state.relationships||typeof state.relationships!=='object')state.relationships={fighters:{},promotions:{},management:{}};return state.relationships}
-function relationshipClamp(n){return Math.max(-100,Math.min(100,Math.round(n)))}
+function relationshipStore(){if(!state.relationships||typeof state.relationships!=='object')state.relationships={fighters:{},promotions:{},management:{}};const r=state.relationships;for(const key of ['fighters','promotions','management'])if(!r[key]||typeof r[key]!=='object')r[key]={};if(r.scaleVersion!==2){for(const key of ['promotions','management'])for(const id of Object.keys(r[key]))r[key][id]=Math.max(0,Math.min(100,Math.round(Number(r[key][id]||0)+50)));for(const item of Object.values(r.fighters))if(item&&typeof item==='object')item.score=Math.max(0,Math.min(100,Math.round(Number(item.score||0)+50)));r.scaleVersion=2;}return r}
+function relationshipClamp(n){return Math.max(0,Math.min(100,Math.round(n)))}
 function fighterPairKey(a,b){return [a.id,b.id].sort((x,y)=>Number(x)-Number(y)).join(':')}
-function fighterRelationship(a,b){return a&&b&&a.id!==b.id?Number(relationshipStore().fighters[fighterPairKey(a,b)]?.score||0):0}
-function changeFighterRelationship(a,b,delta,reason){if(!a||!b||a.id===b.id)return;const store=relationshipStore().fighters,key=fighterPairKey(a,b),old=store[key]||{score:0};store[key]={score:relationshipClamp(old.score+delta),lastDate:state.date,reason};}
+function fighterRelationship(a,b){return a&&b&&a.id!==b.id?Number(relationshipStore().fighters[fighterPairKey(a,b)]?.score??50):50}
+function changeFighterRelationship(a,b,delta,reason){if(!a||!b||a.id===b.id)return;const store=relationshipStore().fighters,key=fighterPairKey(a,b),old=store[key]||{score:50};store[key]={score:relationshipClamp(old.score+delta),lastDate:state.date,reason};}
 function initialRelationshipScore(f,kind){
  const scores=ensureFighterPersonality(f),states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors||{};
  const loyalty=Number(traits.promotionLoyalty??scores.loyalty??50),morale=Number(states.morale??50);
  // Neutral-to-positive starting relationships, influenced by existing personality and morale.
- return relationshipClamp(Math.max(-25,Math.min(65,Math.round(20+(loyalty-50)*.30+(morale-50)*.25+(kind==='management'?-3:0)))));
+ return relationshipClamp(Math.round(50+(loyalty-50)*.30+(morale-50)*.25+(kind==='management'?-3:0)));
 }
 function promotionTrust(f){const r=relationshipStore().promotions;if(!Object.prototype.hasOwnProperty.call(r,f.id))r[f.id]=initialRelationshipScore(f,'promotion');return Number(r[f.id])}
 function managementTrust(f){const r=relationshipStore().management;if(!Object.prototype.hasOwnProperty.call(r,f.id))r[f.id]=initialRelationshipScore(f,'management');return Number(r[f.id])}
 function changeFighterTrust(f,promotionDelta,managementDelta,reason){if(!f)return;const r=relationshipStore();r.promotions[f.id]=relationshipClamp(promotionTrust(f)+promotionDelta);r.management[f.id]=relationshipClamp(managementTrust(f)+managementDelta);f.lastRelationshipEvent={date:state.date,reason};}
-function fighterRelationshipStatus(a,b){const n=fighterRelationship(a,b);return n>=65?'Close friends':n>=25?'Friendly':n<=-65?'Hostile':n<=-25?'Dislike':'Neutral'}
+function fighterRelationshipStatus(a,b){const n=fighterRelationship(a,b);return n>=85?'Close friends':n>=65?'Friendly':n<=15?'Hostile':n<=35?'Dislike':'Neutral'}
 function fighterRelationshipFightModifier(a,b,terms){
- const score=fighterRelationship(a,b);if(score<25)return null;
+ const score=fighterRelationship(a,b);if(score<65)return null;
  const isTitle=!!terms.title,highReward=isTitle||terms.slot==='Main Event';
- if(score>=65&&!highReward)return {status:'Counteroffer',reason:'Close friends are reluctant to fight unless there is a compelling career opportunity.',request:'opponent',requestedPurse:0,minimumDays:7};
- if(score>=25&&!highReward&&socialHash('friends|'+a.id+'|'+b.id+'|'+terms.date)<Math.min(.65,score/140))return {status:'Counteroffer',reason:'Prefers not to compete against a friend without a significant opportunity.',request:'opponent',requestedPurse:0,minimumDays:7};
+ if(score>=85&&!highReward)return {status:'Counteroffer',reason:'Close friends are reluctant to fight unless there is a compelling career opportunity.',request:'opponent',requestedPurse:0,minimumDays:7};
+ if(score>=65&&!highReward&&socialHash('friends|'+a.id+'|'+b.id+'|'+terms.date)<Math.min(.65,(score-50)/90))return {status:'Counteroffer',reason:'Prefers not to compete against a friend without a significant opportunity.',request:'opponent',requestedPurse:0,minimumDays:7};
  return null;
 }
 function resolveFightRivalry(a,b,method,decisionType){
@@ -1085,7 +1085,7 @@ function relationshipWeeklyTick(){
  // Familiarity between gym teammates builds gradually, not automatically into close friendship.
  if(state.week%4===0)for(let i=0;i<roster.length;i++)for(let j=i+1;j<roster.length;j++){
   const a=roster[i],b=roster[j];if(ensureFighterGym(a).name!==ensureFighterGym(b).name)continue;
-  if(fighterRelationship(a,b)<35&&socialHash('gym-'+state.week+'-'+fighterPairKey(a,b))>.55)changeFighterRelationship(a,b,2,'Shared gym');
+  if(fighterRelationship(a,b)<70&&socialHash('gym-'+state.week+'-'+fighterPairKey(a,b))>.55)changeFighterRelationship(a,b,2,'Shared gym');
  }
 }
 function fighterCareerRequestTick(){
@@ -1103,10 +1103,10 @@ function fighterCareerRequestTick(){
   if(days>210)kind='fight';
   else if(ranking>=0&&ranking<=3&&Number(f.winStreak||0)>=3)kind='title';
   else if(Number(f.winStreak||0)>=3&&ranking>3)kind='ranked';
-  else if(morale<30&&trust<-25)kind='concern';
+  else if(morale<30&&trust<25)kind='concern';
   if(!kind)continue;
   // Escalate only after unresolved dissatisfaction over multiple conversations.
-  const severe=kind==='concern'&&Number(last.unresolved||0)>=2&&trust<-50;
+  const severe=kind==='concern'&&Number(last.unresolved||0)>=2&&trust<10;
   const subject=severe?'Serious management dispute':kind==='fight'?'Request for a fight':kind==='title'?'Championship opportunity request':kind==='ranked'?'Request for a ranked opponent':'Concern about career management';
   const body=severe?'My concerns have gone unresolved repeatedly. I need meaningful action or I will reconsider my future here.':kind==='fight'?'I have been inactive for too long and want a fight.':kind==='title'?'My recent results have earned me a chance at the title.':kind==='ranked'?'I want a higher-ranked opponent to progress.':'I am unhappy with how my career has been handled.';
   const id='request-'+f.id+'-'+state.date;
