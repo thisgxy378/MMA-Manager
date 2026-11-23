@@ -27,6 +27,16 @@ function incidentWorldTick(){
    for(const e of affected){
      e.injuryWithdrawals=e.injuryWithdrawals||[];
      if(!e.injuryWithdrawals.some(x=>x.fighterId===f.id))e.injuryWithdrawals.push({fighterId:f.id,date:state.date,until,resolved:false});
+     if(typeof socialPost==='function'&&incidentRandom('volunteer-'+incident.id+'-'+e.id)>.58){
+       const bout=(e.bouts||[]).find(b=>b.aid===f.id||b.bid===f.id);
+       const remaining=state.fighters.find(x=>x.id===(bout?.aid===f.id?bout?.bid:bout?.aid));
+       const candidates=active.filter(x=>x.id!==f.id&&x.id!==remaining?.id&&x.promotion===f.promotion&&x.division===remaining?.division&&x.gender===remaining?.gender&&!x.unavailableUntil&&!x.trainingInjury&&!(e.bouts||[]).some(b=>b.aid===x.id||b.bid===x.id));
+       if(candidates.length){const volunteer=candidates[Math.floor(incidentRandom('volunteer-choice-'+incident.id)*candidates.length)];
+         const statements=['I am training and ready if the promotion needs someone to step in.','If there is an opening, I would consider the opportunity.','I have been preparing. Give me the call and we can talk.'];
+         const statement=statements[Math.floor(incidentRandom('volunteer-tone-'+incident.id)*statements.length)];
+         socialPost('Fighter',volunteer.name+' discusses short-notice opportunity',statement,{key:'volunteer-'+incident.id+'-'+volunteer.id,promotion:volunteer.promotion});
+       }
+     }
      if(f.promotion===state.player)sendInboxMessage({key:'injury-withdrawal-'+e.id+'-'+f.id,sender:'Medical Team',type:'Action Required',subject:'Fight withdrawal: '+f.name,body:f.name+' is medically unavailable until approximately '+until+'. The scheduled bout on '+eventDate(e)+' requires a replacement, rescheduling, or cancellation. Open Events to resolve the booking.'});
    }
  }
