@@ -22,6 +22,7 @@ function incidentWorldTick(){
  world.lastIncident[f.id]=state.date;
  const incident={id:'training-'+state.date+'-'+f.id,date:state.date,fighterId:f.id,partnerId:involved?.id||null,type:'Training injury',severity:f.trainingInjury.severity,public:!privateInfo};
  world.history.unshift(incident);world.history=world.history.slice(0,150);
+ if(!privateInfo&&typeof mediaQuestionForIncident==='function')mediaQuestionForIncident(incident,f);
  // Training partners can interpret the same incident differently.
  if(involved&&typeof changeFighterRelationship==='function'){
    const seed='training-reaction-'+incident.id;
