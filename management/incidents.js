@@ -8,7 +8,7 @@ function incidentWorldTick(){
  const world=incidentWorld(),active=state.fighters.filter(f=>f.status!=='Retired'&&f.status!=='Amateur'&&f.promotion!=='Free Agent');
  for(const f of active){if(f.trainingInjury&&f.trainingInjury.until<=state.date){if(f.unavailableUntil===f.trainingInjury.until)f.unavailableUntil=null;f.trainingInjury=null}}
  // Daily world-scale incidence is intentionally low and bounded.
- if(incidentRandom('incident-day-'+state.date)>.19||!active.length)return;
+ if(incidentRandom('incident-day-'+state.date)>.035||!active.length)return;
  const f=active[Math.floor(incidentRandom('injured-'+state.date)*active.length)];
  if(!f||incidentMedical(f)||world.lastIncident[f.id]&&addDays(world.lastIncident[f.id],70)>state.date)return;
  const severe=incidentRandom('severity-'+state.date)>.90;
@@ -22,6 +22,18 @@ function incidentWorldTick(){
  world.lastIncident[f.id]=state.date;
  const incident={id:'training-'+state.date+'-'+f.id,date:state.date,fighterId:f.id,partnerId:involved?.id||null,type:'Training injury',severity:f.trainingInjury.severity,public:!privateInfo};
  world.history.unshift(incident);world.history=world.history.slice(0,150);
+ // Training partners can interpret the same incident differently.
+ if(involved&&typeof changeFighterRelationship==='function'){
+   const seed='training-reaction-'+incident.id;
+   const reaction=incidentRandom(seed);
+   if(reaction>.72){
+     changeFighterRelationship(f,involved,severe?-12:-5,'Training incident',false);
+     if(incidentRandom(seed+'-reverse')>.55)changeFighterRelationship(involved,f,-3,'Training incident',false);
+   }else if(reaction<.18){
+     changeFighterRelationship(f,involved,2,'Support after training injury',false);
+     changeFighterRelationship(involved,f,2,'Support after training injury',false);
+   }
+ }
  if(severe){f.unavailableUntil=(!f.unavailableUntil||f.unavailableUntil<until)?until:f.unavailableUntil;
    const affected=(state.events||[]).filter(e=>!e.done&&eventDate(e)>=state.date&&eventDate(e)<until&&(e.bouts||[]).some(b=>b.aid===f.id||b.bid===f.id));
    for(const e of affected){
