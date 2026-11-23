@@ -1,5 +1,13 @@
 /* Mechanic 1.4.1: optional, deadline-based media enquiries. */
 function mediaWorld(){if(!state.mediaWorld||typeof state.mediaWorld!=='object')state.mediaWorld={enquiries:[],stories:[]};return state.mediaWorld}
+function mediaRegisterIncident(incident,f){
+ if(!incident.public||incident.severity!=='Serious')return;
+ const world=mediaWorld();
+ if(world.stories.some(x=>x.incidentId===incident.id))return;
+ if(incidentRandom('followup-roll-'+incident.id)>.18)return;
+ world.stories.unshift({incidentId:incident.id,fighterId:f.id,followUpDate:addDays(state.date,3+Math.floor(incidentRandom('followup-delay-'+incident.id)*5)),followedUp:false});
+ world.stories=world.stories.slice(0,100);
+}
 function mediaQuestionForIncident(incident,f){
  if(!state||f.promotion!==state.player||!incident.public||incident.severity!=='Serious')return;
  const world=mediaWorld(),key='media-'+incident.id;
@@ -31,6 +39,19 @@ function mediaAnswer(id,action){
 }
 function mediaWorldTick(){
  if(!state)return;
+ const world=mediaWorld();
+ // Rare follow-up coverage, only for stories already publicly reported.
+ for(const story of world.stories){
+   if(story.followedUp||state.date<story.followUpDate)continue;
+   story.followedUp=true;
+   const f=state.fighters.find(x=>x.id===story.fighterId);
+   if(!f)continue;
+   const known=state.incidentWorld?.history?.find(x=>x.id===story.incidentId);
+   if(!known||!known.public)continue;
+   const clarified=incidentRandom('media-clarify-'+story.incidentId)>.38;
+   socialPost('News',clarified?'Update on '+f.name+' training injury':'Questions remain over '+f.name+' training incident',clarified?'Further reporting suggests the incident was an accidental part of training. The fighter continues recovery.':'The circumstances of the training incident remain unclear. No additional verified details have emerged.',{key:'incident-followup-'+story.incidentId,promotion:f.promotion});
+ }
+
  for(const q of mediaWorld().enquiries){
    if(q.status!=='Pending'||state.date<=q.deadline)continue;
    q.status='Expired';q.answer='No comment';q.resolved=state.date;
