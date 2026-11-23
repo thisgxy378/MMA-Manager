@@ -31,8 +31,8 @@ function mediaAnswer(id,action){
  const m=ensureInbox().find(x=>x.mediaEnquiryId===id);
  if(m){m.status='Answered';m.response=action==='media-support'?'You publicly expressed support for the fighter.':action==='media-cautious'?'You provided a cautious statement.':'You declined to comment.';m.actions=[];m.read=true}
  if(action!=='media-decline'&&f){
-   const headline=action==='media-support'?'Promotion backs '+f.name+' following injury reports':'Promotion comments on '+f.name+' injury reports';
-   const body=action==='media-support'?'The promotion expressed support for the fighter and emphasised recovery.':'The promotion acknowledged the reports without disclosing private medical details.';
+   const headline=q.organic?(action==='media-support'?'Promotion backs '+f.name+' amid reports':'Promotion addresses reports involving '+f.name):action==='media-support'?'Promotion backs '+f.name+' following injury reports':'Promotion comments on '+f.name+' injury reports';
+   const body=q.organic?(action==='media-support'?'The promotion publicly expressed support for its fighter.':'The promotion offered a limited statement without confirming unverified claims.'):action==='media-support'?'The promotion expressed support for the fighter and emphasised recovery.':'The promotion acknowledged the reports without disclosing private medical details.';
    socialPost('News',headline,body,{key:'media-answer-'+id,promotion:state.player});
  }
  return true;
@@ -69,3 +69,12 @@ respondInboxMessage=function(id,action){
  }
  return originalMediaInboxReply(id,action);
 };
+
+function mediaCreateOrganicEnquiry(incident,a,b){
+ const world=mediaWorld(),id='media-'+incident.id;
+ if(world.enquiries.some(q=>q.id===id))return;
+ const relevant=a.promotion===state.player?a:b;
+ const days=incident.type==='Public callout'?1:3,deadline=addDays(state.date,days);
+ world.enquiries.unshift({id,incidentId:incident.id,fighterId:relevant.id,created:state.date,deadline,status:'Pending',answer:null,organic:true});
+ sendInboxMessage({key:id,sender:'MMA Press',type:'Media Enquiry',subject:'Media enquiry: '+a.name+' and '+b.name,body:'A journalist has requested your promotion’s comment about reports concerning '+a.name+' and '+b.name+'. Response deadline: '+deadline+'. You are not required to respond.',mediaEnquiryId:id,actions:[{id:'media-support',label:'Support the fighter'},{id:'media-cautious',label:'Provide a cautious statement'},{id:'media-decline',label:'Decline to comment'}]});
+}
