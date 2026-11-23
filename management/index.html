@@ -417,12 +417,17 @@ function evaluateFightOffer(f,opponent,terms){
  const competitiveness=Number(traits.competitiveness??50),motivation=Number(states.motivation??50),popularity=Number(f.popularity??50);
  const difficulty=Number(opponent.skill||50)-Number(f.skill||50),days=Math.max(0,Math.round((Date.parse(terms.date)-Date.parse(state.date))/86400000));
  const classes=divisionSteps(f),cutting=classes.indexOf(f.division)>classes.indexOf(terms.weightClass);
+ const medical=f.trainingInjury&&f.trainingInjury.until>state.date?f.trainingInjury:null;
+ if(medical?.severity==='Serious'&&medical.until>terms.date)return {status:'Rejected',reason:'Not medically cleared to compete.',request:'date',minimumDays:Math.ceil((Date.parse(medical.until)-Date.parse(state.date))/86400000)+1};
  const minimumDays=cutting?63:7;
  const preferredDays=cutting?63:Math.round(35+(100-motivation)*.08);
  const shortNotice=!cutting&&days<preferredDays;
  const shortNoticeScore=Math.max(0,Math.min(100,motivation*.35+competitiveness*.30+Number(traits.compromise??50)*.20+(100-Number(traits.negotiatingPower??50))*.15));
  const noticePressure=Math.max(0,(preferredDays-days)/preferredDays);
- const shortNoticeChance=Math.max(.04,Math.min(.96,(shortNoticeScore/100)*1.12-noticePressure*.42));
+ const recentCamp=state.events.some(e=>e!==terms.event&&!e.done&&eventDate(e)>=state.date&&eventDate(e)<=terms.date&&(e.bouts||[]).some(b=>b.aid===f.id||b.bid===f.id));
+ const readinessBonus=recentCamp?.12:0;
+ const injuryPenalty=medical?.severity==='Minor'?.20:0;
+ const shortNoticeChance=Math.max(.02,Math.min(.94,(shortNoticeScore/100)*1.12-noticePressure*.42+readinessBonus-injuryPenalty));
  const shortNoticeRoll=(()=>{const key=[f.id,opponent.id,terms.date,terms.weightClass].join('|');let hash=2166136261;for(let i=0;i<key.length;i++)hash=Math.imul(hash^key.charCodeAt(i),16777619);return (hash>>>0)/4294967296})();
  const willingShortNotice=!shortNotice||shortNoticeRoll<shortNoticeChance;
  const contract=state.contracts.find(c=>c.id===f.id),base=Number(contract?.show||10000);
