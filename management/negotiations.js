@@ -126,7 +126,7 @@ function submitNegotiation(){
  if(r<assessment.odds){return signNegotiatedContract(f,o)}
  if(n.round>=n.maxRounds||r>assessment.odds+.72&&assessment.odds<.16){
   n.history.push('Fighter walks away: terms too far apart.');
-  recordNegotiation('NEGOTIATIONS BROKE DOWN');log(f.name+' ends contract talks with '+state.player+'.');if(typeof sendInboxMessage==='function')sendInboxMessage({subject:'Contract talks ended: '+f.name,sender:f.name,type:'Contract Offer',body:'The fighter rejected the proposed terms and ended negotiations.'});save();
+  recordNegotiation('NEGOTIATIONS BROKE DOWN');log(f.name+' ends contract talks with '+state.player+'.');if(typeof narrativeFailedNegotiation==='function')narrativeFailedNegotiation(f,assessment.odds<.16?'lowball':'breakdown');if(typeof sendInboxMessage==='function')sendInboxMessage({subject:'Contract talks ended: '+f.name,sender:f.name,type:'Contract Offer',body:'The fighter rejected the proposed terms and ended negotiations.'});save();
   document.getElementById('offerResult').innerHTML='<div class="negotiation-result bad">Negotiations have broken down. Close this window to try again later.</div>';
   document.getElementById('submitOffer').disabled=true;renderNegotiationProgress();return;
  }
