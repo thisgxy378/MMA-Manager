@@ -531,6 +531,8 @@ function startLiveCommentary(){
 function runEvent(mode='instant',preparedFight=null){
  const e=eventSelected();
  if(!e||e.done||eventDate(e)>state.date)return;
+ if((e.injuryWithdrawals||[]).some(w=>!w.resolved))return alert('Resolve medical withdrawals in the event editor before starting this event.');
+ if(e.bouts.some(b=>[b.aid,b.bid].some(id=>{const f=state.fighters.find(x=>x.id===id);return f?.unavailableUntil&&f.unavailableUntil>eventDate(e)})))return alert('A booked fighter is medically unavailable. Resolve the affected fight first.');
  if(!e.started){if(!e.bouts.length)return alert('Add at least one fight before starting the event.');e.started=true;e.nextFightIndex=e.bouts.length-1;e.results=[];e.pursesPaid=0;e.finishers=[];e.bestFightScore=-1;save();render();return}
  if(!['instant','commentary'].includes(mode))return alert('3D simulation is not available yet.');
  const b=e.bouts[e.nextFightIndex];if(!b)return;
