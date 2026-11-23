@@ -1047,8 +1047,21 @@ const PROMISE_KINDS={fight:'Arrange a fight',ranked:'Offer a higher-ranked oppon
 function relationshipStore(){if(!state.relationships||typeof state.relationships!=='object')state.relationships={fighters:{},promotions:{},management:{}};const r=state.relationships;for(const key of ['fighters','promotions','management'])if(!r[key]||typeof r[key]!=='object')r[key]={};if(r.scaleVersion!==2){for(const key of ['promotions','management'])for(const id of Object.keys(r[key]))r[key][id]=Math.max(0,Math.min(100,Math.round(Number(r[key][id]||0)+50)));for(const item of Object.values(r.fighters))if(item&&typeof item==='object')item.score=Math.max(0,Math.min(100,Math.round(Number(item.score||0)+50)));r.scaleVersion=2;}return r}
 function relationshipClamp(n){return Math.max(0,Math.min(100,Math.round(n)))}
 function fighterPairKey(a,b){return [a.id,b.id].sort((x,y)=>Number(x)-Number(y)).join(':')}
-function fighterRelationship(a,b){return a&&b&&a.id!==b.id?Number(relationshipStore().fighters[fighterPairKey(a,b)]?.score??50):50}
-function changeFighterRelationship(a,b,delta,reason){if(!a||!b||a.id===b.id)return;const store=relationshipStore().fighters,key=fighterPairKey(a,b),old=store[key]||{score:50};store[key]={score:relationshipClamp(old.score+delta),lastDate:state.date,reason};}
+function fighterRelationship(a,b){
+ if(!a||!b||a.id===b.id)return 50;
+ const record=relationshipStore().fighters[fighterPairKey(a,b)];
+ if(!record)return 50;
+ // Legacy symmetric relationships retain their original value until changed.
+ return Number(record.directions?.[String(a.id)]?.score??record.score??50);
+}
+function changeFighterRelationship(a,b,delta,reason,mutual=true){
+ if(!a||!b||a.id===b.id)return;
+ const store=relationshipStore().fighters,key=fighterPairKey(a,b),record=store[key]||{score:50};
+ if(!record.directions)record.directions={};
+ const update=(from,to)=>{const id=String(from.id),previous=record.directions[id]?.score??record.score??50;record.directions[id]={score:relationshipClamp(Number(previous)+delta),lastDate:state.date,reason,targetId:to.id};};
+ update(a,b);if(mutual)update(b,a);
+ record.lastDate=state.date;record.reason=reason;store[key]=record;
+}
 function initialRelationshipScore(f,kind){
  const scores=ensureFighterPersonality(f),states=ensurePersonalityStates(f),traits=f.hiddenPersonalityFactors||{};
  const loyalty=Number(traits.promotionLoyalty??scores.loyalty??50),morale=Number(states.morale??50);
@@ -1081,11 +1094,21 @@ function resolveFightRivalry(a,b,method,decisionType){
 }
 
 function relationshipWeeklyTick(){
- const roster=state.fighters.filter(f=>f.promotion===state.player&&f.status!=='Retired');
- // Familiarity between gym teammates builds gradually, not automatically into close friendship.
- if(state.week%4===0)for(let i=0;i<roster.length;i++)for(let j=i+1;j<roster.length;j++){
-  const a=roster[i],b=roster[j];if(ensureFighterGym(a).name!==ensureFighterGym(b).name)continue;
-  if(fighterRelationship(a,b)<70&&socialHash('gym-'+state.week+'-'+fighterPairKey(a,b))>.55)changeFighterRelationship(a,b,2,'Shared gym');
+ if(state.week%4!==0)return;
+ const active=state.fighters.filter(f=>f.status!=='Retired'&&f.status!=='Amateur');
+ const byGym=new Map();
+ for(const f of active){const gym=ensureFighterGym(f)?.name;if(!gym)continue;if(!byGym.has(gym))byGym.set(gym,[]);byGym.get(gym).push(f)}
+ // Bounded sampling avoids a quadratic pass over the worldwide fighter database.
+ for(const [gym,members] of byGym){
+  if(members.length<2)continue;
+  for(let i=0;i<Math.min(3,members.length);i++){
+   const a=members[Math.floor(socialHash('gym-a-'+state.date+'-'+gym+'-'+i)*members.length)];
+   const b=members[Math.floor(socialHash('gym-b-'+state.date+'-'+gym+'-'+i)*members.length)];
+   if(!a||!b||a.id===b.id)continue;
+   const forward=fighterRelationship(a,b),reverse=fighterRelationship(b,a);
+   if(forward<70&&socialHash('gym-shift-'+state.date+'-'+a.id+'-'+b.id)>.35)changeFighterRelationship(a,b,1,'Shared gym',false);
+   if(reverse<70&&socialHash('gym-return-'+state.date+'-'+b.id+'-'+a.id)>.35)changeFighterRelationship(b,a,1,'Shared gym',false);
+  }
  }
 }
 function fighterCareerRequestTick(){
