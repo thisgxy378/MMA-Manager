@@ -30,7 +30,7 @@ function changeFighterDivision(id,newDivision){
  const ds=divisionSteps(f),from=ds.indexOf(f.division),to=ds.indexOf(newDivision);
  if(from<0||to<0||Math.abs(from-to)!==1)return false;
  if(state.events.some(e=>!e.done&&((e.bouts||[]).some(b=>b.aid===f.id||b.bid===f.id)||e.aid===f.id||e.bid===f.id)))return false;
- f.division=newDivision;save();render();return true;
+ f.division=newDivision;f.pendingDivisionDebut=newDivision;save();render();return true;
 }
 const $=id=>document.getElementById(id);const money=n=>'$'+Math.round(n).toLocaleString('en-US');const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 const ATTRIBUTE_GROUPS=[
@@ -503,7 +503,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  const result=evaluateFightOffer(b,a,{date:h.date,slot:h.slot,weightClass:h.weightClass,title:h.title,purse,attempts:offer.attempts||0});
  offer.attempts=(offer.attempts||0)+1;
  if(result.status!=='Accepted'){offer.request=result.request;offer.requestedPurse=result.requestedPurse;m.response=result.status+' — '+result.reason;m.body+='\nRevised offer: '+money(purse)+' — '+result.status+'. '+result.reason;if(result.status==='Rejected')m.actions=[{id:'fight-close',label:'Close negotiations'}];save();render();return}
- e.bouts.push({aid:a.id,bid:b.id,slot:h.slot,rounds:h.rounds,title:h.title,titleType:h.titleType,weightClass:h.weightClass,extraFightGuarantees:{[a.id]:0,[b.id]:purse}});delete e.acceptedHold;sortEventBouts(e);m.status='Resolved';m.actions=[];m.response='Both fighters accepted. Fight confirmed for '+e.name+'.';socialPost('News','Fight announced: '+a.name+' vs '+b.name,e.name+' · '+eventDate(e),{key:'bout-'+e.id+'-'+a.id+'-'+b.id,fighterIds:[a.id,b.id]});save();render();return;
+ e.bouts.push({aid:a.id,bid:b.id,slot:h.slot,rounds:h.rounds,title:h.title,titleType:h.titleType,weightClass:h.weightClass,permanentMoveId:offer.permanentMoveId,extraFightGuarantees:{[a.id]:0,[b.id]:purse}});delete e.acceptedHold;sortEventBouts(e);m.status='Resolved';m.actions=[];m.response='Both fighters accepted. Fight confirmed for '+e.name+'.';socialPost('News','Fight announced: '+a.name+' vs '+b.name,e.name+' · '+eventDate(e),{key:'bout-'+e.id+'-'+a.id+'-'+b.id,fighterIds:[a.id,b.id]});save();render();return;
  }
  if(action==='fight-close'){m.status='Closed';m.response='Offer withdrawn.';m.read=true;save();render();return}
  if(action==='fight-revise'&&!m.revising){m.revising=true;m.actions=[{id:'fight-revise',label:'Submit revised offer'},{id:'fight-close',label:'Withdraw offer'}];save();render();return}
@@ -561,7 +561,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
   destination=eventNormalize({...e,id:'event-'+Date.now()+'-'+Math.floor(Math.random()*100000),name:state.player+' Fight Night '+date,date,done:false,bouts:[],results:[],hype:0});
   state.events.push(destination);
  }
- destination.bouts.push({aid:fighter.id,bid:opponent.id,slot,rounds:offer.rounds,title:!!offer.title&&opponent.id===originalOpponent?.id,titleType:offer.titleType,weightClass,extraFightGuarantees:{[fighter.id]:purse,[opponent.id]:purseFor(opponent)}});
+ destination.bouts.push({aid:fighter.id,bid:opponent.id,slot,rounds:offer.rounds,title:!!offer.title&&opponent.id===originalOpponent?.id,titleType:offer.titleType,weightClass,permanentMoveId:opponent.id===originalOpponent?.id?offer.permanentMoveId:null,extraFightGuarantees:{[fighter.id]:purse,[opponent.id]:purseFor(opponent)}});
  sortEventBouts(destination);
  m.status='Resolved';m.read=true;m.revising=false;m.actions=null;m.response='Both fighters accepted. Fight booked on '+destination.name+' for '+date+'.';
  ensureInbox().filter(x=>x!==m&&x.status==='Pending'&&x.fightOffer&&String(x.fightOffer.eventId)===String(e.id)&&[x.fightOffer.aid,x.fightOffer.bid].some(id=>id===fighter.id||id===opponent.id)).forEach(x=>{x.status='Closed';x.response='Matchup superseded by a confirmed booking.'});
@@ -1310,7 +1310,7 @@ function rankingScore(f,amateur=false){
 }
 function rankingPositions(promotion,gender,division){
  const amateur=promotion==='Streetbeefs';
- return state.fighters.filter(f=>(f.gender||'Male')===gender&&(promotion==='Worldwide'?f.status!=='Amateur':f.promotion===promotion&&(amateur?f.status==='Amateur':f.status!=='Amateur'))&&(division==='Pound for Pound'||f.division===division))
+ return state.fighters.filter(f=>(f.gender||'Male')===gender&&(promotion==='Worldwide'?f.status!=='Amateur':f.promotion===promotion&&(amateur?f.status==='Amateur':f.status!=='Amateur'))&&(division==='Pound for Pound'||(f.division===division&&f.pendingDivisionDebut!==division)))
  .sort((a,b)=>rankingScore(b,amateur)-rankingScore(a,amateur)||rankingRecord(b,amateur).wins-rankingRecord(a,amateur).wins||a.name.localeCompare(b.name))
  .slice(0,15).map(f=>f.id);
 }
@@ -1410,4 +1410,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="social2.js?v=2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=accepted-fighter-counteroffer-2"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="social2.js?v=2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=division-movement-1"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
