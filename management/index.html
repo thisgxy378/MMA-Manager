@@ -411,6 +411,18 @@ function fighterHasBooking(f){return state.events.some(e=>!e.done&&(e.aid===f.id
 function ensureInbox(){if(!Array.isArray(state.inbox))state.inbox=[];return state.inbox}
 function sendInboxMessage(data){const inbox=ensureInbox();if(data.key&&inbox.some(m=>m.key===data.key))return;inbox.unshift({id:'msg-'+Date.now()+'-'+Math.floor(Math.random()*100000),date:state.date,read:false,status:data.actions?'Pending':'Information',...data});if(inbox.length>250)inbox.length=250}
 function inboxView(){const all=ensureInbox();all.forEach(m=>{if(m.read&&!(m.status==='Pending'&&Array.isArray(m.actions)&&m.actions.length))m.archived=true});const archived=!!state.showArchivedInbox;const messages=all.filter(m=>archived?m.archived:!m.archived);return '<section class="panel"><h2>Inbox <span class="pill">'+all.filter(m=>!m.read&&!m.archived).length+' unread</span></h2><p class="muted">Messages requiring action remain in your inbox. Read messages with no outstanding actions are archived automatically.</p><button id="toggleInboxArchive">'+(archived?'Back to Inbox':'View Archive ('+all.filter(m=>m.archived).length+')')+'</button>'+(messages.length?messages.map(m=>'<div class="feed" style="margin-bottom:12px"><strong>'+esc(m.subject)+'</strong> <span class="muted">'+esc(m.date)+(m.read?'':' · Unread')+'</span><div class="muted">'+esc(m.sender||'Management')+' · '+esc(m.type||'Information')+'</div><p>'+esc(m.body)+'</p>'+(m.status==='Pending'&&m.actions?(m.fightOffer&&m.revising?'<div class="stack" style="margin:10px 0"><label>Fight date <select id="fight-date-'+esc(m.id)+'">'+eventWeekOptions(Math.max(1,weeksUntilSaturday(m.fightOffer.date||addDays(state.date,m.fightOffer.minimumNoticeDays||42))))+'</select></label><label>Extra fight guarantee ($) <input type="number" min="0" step="1000" id="fight-purse-'+esc(m.id)+'" value="'+Number(m.fightOffer.purses?.[m.fighterId]??m.fightOffer.requestedPurse??0)+'"></label><label>Opponent extra fight guarantee ($) <input type="number" min="0" step="1000" id="fight-opponent-purse-'+esc(m.id)+'" value="'+Number(m.fightOffer.purses?.[m.fighterId===m.fightOffer.aid?m.fightOffer.bid:m.fightOffer.aid]??state.contracts.find(c=>c.id===(m.fighterId===m.fightOffer.aid?m.fightOffer.bid:m.fightOffer.aid))?.fightGuarantee??0)+'"></label><label>Card position <select id="fight-slot-'+esc(m.id)+'">'+['Main Event','Co-Main Event','Main Card','Prelims','Early Prelims'].map(slot=>'<option value="'+esc(slot)+'"'+(slot===m.fightOffer.slot?' selected':'')+'>'+esc(slot)+'</option>').join('')+'</select></label><label>Opponent <select id="fight-opponent-'+esc(m.id)+'">'+state.fighters.filter(f=>f.promotion===state.player&&f.id!==m.fighterId&&eligibleFightDivision(f,state.fighters.find(x=>x.id===m.fighterId))).map(f=>'<option value="'+f.id+'"'+(f.id===(m.fighterId===m.fightOffer.aid?m.fightOffer.bid:m.fightOffer.aid)?' selected':'')+'>'+esc(f.name)+'</option>').join('')+'</select></label></div>':'')+m.actions.map(a=>'<button data-inbox-reply="'+esc(m.id)+'" data-reply="'+esc(a.id)+'">'+esc(a.label)+'</button>').join(' '):'<span class="muted">'+esc(m.response||m.status)+'</span>')+'</div>').join(''):'<div class="empty">No messages yet.</div>')+'</section>'}
+// Negotiation-only standing: carry sporting credibility across adjacent divisions.
+function negotiationRank(f,targetDivision){
+ const gender=f.gender||'Male',rank=rankingPositions(f.promotion,gender,f.division).indexOf(f.id);
+ const title=state.championships?.[championshipKey(f.promotion,gender,f.division)];
+ if(title?.championId===f.id||title?.interimChampionId===f.id)return 0;
+ if(f.division===targetDivision)return rank;
+ if(rank>=0)return Math.min(14,rank+1);
+ const target=state.fighters.filter(x=>x.promotion===f.promotion&&(x.gender||'Male')===gender&&x.division===targetDivision&&x.status==='Professional');
+ const ordered=target.sort((a,b)=>rankingScore(b,false)-rankingScore(a,false));
+ const score=rankingScore(f,false),position=ordered.filter(x=>rankingScore(x,false)>score).length;
+ return position<15?Math.min(14,position+2):-1;
+}
 function evaluateFightOffer(f,opponent,terms){
  ensureFighterPersonality(f);
  const traits=f.hiddenPersonalityFactors||{},states=f.temporaryPersonalityStates||{};
@@ -431,17 +443,18 @@ function evaluateFightOffer(f,opponent,terms){
  const shortNoticeRoll=(()=>{const key=[f.id,opponent.id,terms.date,terms.weightClass].join('|');let hash=2166136261;for(let i=0;i<key.length;i++)hash=Math.imul(hash^key.charCodeAt(i),16777619);return (hash>>>0)/4294967296})();
  const willingShortNotice=!shortNotice||shortNoticeRoll<shortNoticeChance;
  const contract=state.contracts.find(c=>c.id===f.id),base=Number(contract?.show||10000);
- const rankList=rankingPositions(f.promotion,f.gender||'Male',f.division),rankIndex=rankList.indexOf(f.id);
+ const rankIndex=negotiationRank(f,terms.weightClass||f.division);
  const rankPower=rankIndex<0?0:Math.max(0,1-rankIndex/14);
  const bouts=Math.max(0,Number(f.wins||0)+Number(f.losses||0)+Number(f.draws||0));
  const experiencePower=Math.min(1,bouts/25),popularityPower=Math.min(1,Math.max(0,popularity)/100);
- const opponentRankList=rankingPositions(opponent.promotion,opponent.gender||'Male',opponent.division);
- const opponentRankIndex=opponentRankList.indexOf(opponent.id);
+ const opponentRankIndex=negotiationRank(opponent,terms.weightClass||opponent.division);
  const rankGap=rankIndex>=0&&opponentRankIndex>=0?opponentRankIndex-rankIndex:rankIndex>=0?16-rankIndex:0;
  const exposure=Math.max(0,Number(opponent.popularity||50)-popularity);
- const careerReward=(opponentRankIndex>=0&&rankIndex>=0&&opponentRankIndex<rankIndex?Math.min(1,(rankIndex-opponentRankIndex)/10):0)*.55+Math.min(1,exposure/40)*.45;
+ const crossDivision=f.division!==opponent.division;
+ const crossCredit=crossDivision&&opponentRankIndex>=0?Math.max(0,.25-opponentRankIndex*.012):0;
+ const careerReward=crossCredit+(opponentRankIndex>=0&&rankIndex>=0&&opponentRankIndex<rankIndex?Math.min(1,(rankIndex-opponentRankIndex)/10):0)*.55+Math.min(1,exposure/40)*.45;
  const opponentRisk=Math.max(0,difficulty)/20*(1-competitiveness/160);
- const lowReward=rankIndex>=0&&rankIndex<=7&&rankGap>=7&&exposure<15;
+ const lowReward=rankIndex>=0&&rankIndex<=7&&rankGap>=7&&exposure<15&&!(crossDivision&&opponentRankIndex>=0&&opponentRankIndex<=7);
  const championship=state.championships?.[championshipKey(f.promotion,f.gender||'Male',f.division)];const titleOpportunity=terms.title?(championship?.championId===f.id?.08:.32):0;const opponentValue=careerReward-opponentRisk-(lowReward?Math.min(.55,rankGap/25):0)+titleOpportunity+fanDemand(f,opponent)*.0007;
  const bargainingPower=Math.max(0,Math.min(1,rankPower*.45+popularityPower*.35+experiencePower*.20));
  const leverage=Math.max(0,Math.min(1,bargainingPower*.75+Number(traits.negotiatingPower??50)/100*.25));
