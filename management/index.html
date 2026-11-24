@@ -451,10 +451,10 @@ function evaluateFightOffer(f,opponent,terms){
  const rankGap=rankIndex>=0&&opponentRankIndex>=0?opponentRankIndex-rankIndex:rankIndex>=0?16-rankIndex:0;
  const exposure=Math.max(0,Number(opponent.popularity||50)-popularity);
  const crossDivision=f.division!==opponent.division;
- const crossCredit=crossDivision&&opponentRankIndex>=0?Math.max(0,.25-opponentRankIndex*.012):0;
+ const crossCredit=crossDivision?Math.max(0,Math.min(.35,(opponentRankIndex>=0?.25-opponentRankIndex*.012:0)+Math.max(0,Number(opponent.popularity||0)-40)*.003+Math.max(0,Number(opponent.skill||0)-Number(f.skill||0)+10)*.005)):0;
  const careerReward=crossCredit+(opponentRankIndex>=0&&rankIndex>=0&&opponentRankIndex<rankIndex?Math.min(1,(rankIndex-opponentRankIndex)/10):0)*.55+Math.min(1,exposure/40)*.45;
  const opponentRisk=Math.max(0,difficulty)/20*(1-competitiveness/160);
- const lowReward=rankIndex>=0&&rankIndex<=7&&rankGap>=7&&exposure<15&&!(crossDivision&&opponentRankIndex>=0&&opponentRankIndex<=7);
+ const lowReward=!crossDivision&&rankIndex>=0&&rankIndex<=7&&rankGap>=7&&exposure<15;
  const championship=state.championships?.[championshipKey(f.promotion,f.gender||'Male',f.division)];const titleOpportunity=terms.title?(championship?.championId===f.id?.08:.32):0;const opponentValue=careerReward-opponentRisk-(lowReward?Math.min(.55,rankGap/25):0)+titleOpportunity+fanDemand(f,opponent)*.0007;
  const bargainingPower=Math.max(0,Math.min(1,rankPower*.45+popularityPower*.35+experiencePower*.20));
  const leverage=Math.max(0,Math.min(1,bargainingPower*.75+Number(traits.negotiatingPower??50)/100*.25));
