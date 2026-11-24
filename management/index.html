@@ -470,6 +470,21 @@ function evaluateFightOffer(f,opponent,terms){
 function saturdayFromDate(date){const day=new Date(date+'T12:00:00').getDay();return addDays(date,(6-day+7)%7)}
 function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id);if(!m||m.status!=='Pending')return;if(m.requestKind&&action.startsWith('request-'))return answerFighterRequest(m,action);if(m.fightOffer){
  const offer=m.fightOffer;
+ if(offer.heldToken){
+ const e=state.events.find(x=>String(x.id)===String(offer.eventId)),h=e?.acceptedHold;
+ if(action==='fight-close'){m.status='Closed';m.response='Offer withdrawn. Accepted fighter remains reserved.';m.actions=[];save();render();return}
+ if(!h||h.token!==offer.heldToken||e.done||e.started){m.status='Closed';m.response='This offer is no longer current.';m.actions=[];save();render();return}
+ const a=state.fighters.find(f=>f.id===h.fighterId),b=state.fighters.find(f=>f.id===m.fighterId);
+ if(!a||!b||!fighterAvailable(a,e)||!fighterAvailable(b,e)||e.bouts.some(x=>[x.aid,x.bid].some(id=>id===a.id||id===b.id)))return alert('A fighter is no longer available.');
+ if(!['fight-accept','fight-held-revise'].includes(action))return;
+ if(action==='fight-accept'&&offer.request!=='purse')return alert('This counteroffer requires changing the agreed date, card position or opponent. Release the reservation to change those terms, or make a revised purse offer.');
+ const raw=action==='fight-accept'?String(offer.requestedPurse??0):prompt('Additional guaranteed purse for '+b.name+' (above contracted show purse):',String(offer.requestedPurse??0));
+ if(raw===null)return;const purse=Number(raw);if(!Number.isFinite(purse)||purse<0)return alert('Enter a valid purse.');
+ const result=evaluateFightOffer(b,a,{date:h.date,slot:h.slot,weightClass:h.weightClass,title:h.title,purse,attempts:offer.attempts||0});
+ offer.attempts=(offer.attempts||0)+1;
+ if(result.status!=='Accepted'){offer.request=result.request;offer.requestedPurse=result.requestedPurse;m.response=result.status+' — '+result.reason;m.body+='\nRevised offer: '+money(purse)+' — '+result.status+'. '+result.reason;if(result.status==='Rejected')m.actions=[{id:'fight-close',label:'Close negotiations'}];save();render();return}
+ e.bouts.push({aid:a.id,bid:b.id,slot:h.slot,rounds:h.rounds,title:h.title,titleType:h.titleType,weightClass:h.weightClass,extraFightGuarantees:{[a.id]:0,[b.id]:purse}});delete e.acceptedHold;sortEventBouts(e);m.status='Resolved';m.actions=[];m.response='Both fighters accepted. Fight confirmed for '+e.name+'.';socialPost('News','Fight announced: '+a.name+' vs '+b.name,e.name+' · '+eventDate(e),{key:'bout-'+e.id+'-'+a.id+'-'+b.id,fighterIds:[a.id,b.id]});save();render();return;
+ }
  if(action==='fight-close'){m.status='Closed';m.response='Offer withdrawn.';m.read=true;save();render();return}
  if(action==='fight-revise'&&!m.revising){m.revising=true;m.actions=[{id:'fight-revise',label:'Submit revised offer'},{id:'fight-close',label:'Withdraw offer'}];save();render();return}
  if(!['fight-revise','fight-accept'].includes(action))return;
@@ -1375,4 +1390,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="social2.js?v=2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=accepted-fighter-hold-1"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="social2.js?v=2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=accepted-fighter-counteroffer-2"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
