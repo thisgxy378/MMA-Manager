@@ -507,6 +507,7 @@ function startLiveCommentary(){
  const e=eventSelected();if(!e||!e.started||e.done)return;
  const b=e.bouts[e.nextFightIndex];if(!b)return;
  const a=state.fighters.find(f=>f.id===b.aid),c=state.fighters.find(f=>f.id===b.bid);if(!a||!c)return;
+ if(!eventMedicalReady(e,[b]))return alert('A fighter in the upcoming bout is medically unavailable. Resolve the affected fight first.');
  const fight=simulateFightRounds(a,c,b.rounds);
  const actions=fight.actionEvents||buildFightActionStream(a,c,fight);fight.actionEvents=actions;
  const lines=actions.filter(x=>x.importance>=.28).map(x=>({round:x.round,clock:x.clock,text:x.text,importance:x.importance}));
@@ -527,12 +528,16 @@ function startLiveCommentary(){
  finish.onclick=()=>{clear();overlay.remove();runEvent('commentary',fight)};
  step();schedule();
 }
+function eventMedicalReady(e,bouts){return !bouts.some(b=>[b.aid,b.bid].some(id=>{const f=state.fighters.find(x=>x.id===id);return f?.unavailableUntil&&f.unavailableUntil>eventDate(e)}))}
 function runEvent(mode='instant',preparedFight=null){
  const e=eventSelected();
  if(!e||e.done||eventDate(e)>state.date)return;
+ if(!preparedFight){
  if(e.acceptedHold)return alert('Find an opponent for the accepted fighter or release them before starting the event.');
- if((e.injuryWithdrawals||[]).some(w=>!w.resolved))return alert('Resolve medical withdrawals in the event editor before starting this event.');
- if(e.bouts.some(b=>[b.aid,b.bid].some(id=>{const f=state.fighters.find(x=>x.id===id);return f?.unavailableUntil&&f.unavailableUntil>eventDate(e)})))return alert('A booked fighter is medically unavailable. Resolve the affected fight first.');
+ if(!e.started&&(e.injuryWithdrawals||[]).some(w=>!w.resolved))return alert('Resolve medical withdrawals in the event editor before starting this event.');
+ const pending=e.started?[e.bouts[e.nextFightIndex]].filter(Boolean):e.bouts;
+ if(!eventMedicalReady(e,pending))return alert('A fighter in the upcoming bout is medically unavailable. Resolve the affected fight first.');
+ }
  if(!e.started){if(!e.bouts.length)return alert('Add at least one fight before starting the event.');e.started=true;e.nextFightIndex=e.bouts.length-1;e.results=[];e.pursesPaid=0;e.finishers=[];e.bestFightScore=-1;save();render();return}
  if(!['instant','commentary'].includes(mode))return alert('3D simulation is not available yet.');
  const b=e.bouts[e.nextFightIndex];if(!b)return;
