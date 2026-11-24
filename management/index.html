@@ -963,7 +963,7 @@ function increaseRivalry(a,b,amount,reason){
 }
 function fanDemand(a,b){
  if(!a||!b)return 0;
- const ids=rankingPositions(a.promotion,a.gender||'Male',a.division),ra=ids.indexOf(a.id),rb=ids.indexOf(b.id);
+ const ra=rankingPositions(a.promotion,a.gender||'Male',a.division).indexOf(a.id),rb=rankingPositions(b.promotion,b.gender||'Male',b.division).indexOf(b.id);
  return Math.max(0,Math.min(100,Math.round((Number(a.popularity||45)+Number(b.popularity||45))*.34+(ra>=0&&rb>=0?Math.max(0,20-Math.abs(ra-rb)*2):5)+rivalryIntensity(a,b)*.2)));
 }
 function eventFanHype(e){
@@ -1410,4 +1410,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="social2.js?v=split-panel-1"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=negotiation-context-2"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="social2.js?v=weighted-hype-1"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=negotiation-context-2"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
