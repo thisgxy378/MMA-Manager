@@ -1355,7 +1355,7 @@ function bind(){const scope=$('s2Scope');if(scope)scope.onchange=()=>{s2World().
  if(existing)existing.remove();
  grid.querySelectorAll('[data-roster-bio]').forEach(card=>card.setAttribute('aria-expanded','false'));
  const panel=document.createElement('section');panel.id='rosterBioPanel';panel.className='panel roster-inline-bio';panel.dataset.fighterId=String(id);panel.setAttribute('aria-live','polite');
- panel.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><h2>Fighter profile</h2><button type="button" id="closeRosterBio">Close</button></div>'+'<div class="roster-bio-content">'+rosterFighterBioHTML(id)+'</div>';
+ panel.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><h2>Fighter profile</h2><button type="button" id="closeRosterBio">Close</button></div>'+'<div class="roster-bio-content">'+rosterFighterBioHTML(id)+(typeof s2Profile==='function'?s2Profile(f):'')+'</div>';
  // Insert after the selected card's grid row so the profile appears immediately below it.
  const cards=[...grid.querySelectorAll('.roster-player-card')],index=cards.indexOf(b);
  const columns=Math.max(1,Math.round(grid.clientWidth/(b.getBoundingClientRect().width+16)));
@@ -1375,4 +1375,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="social2.js?v=1"></script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=interim-social-09217645"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="social2.js?v=2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=interim-social-09217645"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
