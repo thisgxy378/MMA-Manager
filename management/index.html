@@ -476,8 +476,15 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
  if(!h||h.token!==offer.heldToken||e.done||e.started){m.status='Closed';m.response='This offer is no longer current.';m.actions=[];save();render();return}
  const a=state.fighters.find(f=>f.id===h.fighterId),b=state.fighters.find(f=>f.id===m.fighterId);
  if(!a||!b||!fighterAvailable(a,e)||!fighterAvailable(b,e)||e.bouts.some(x=>[x.aid,x.bid].some(id=>id===a.id||id===b.id)))return alert('A fighter is no longer available.');
+ if(action==='fight-held-submit'){const date=saturdayAfterWeeks(document.getElementById('fight-date-'+m.id)?.value),slot=document.getElementById('fight-slot-'+m.id)?.value,opponentId=Number(document.getElementById('fight-opponent-'+m.id)?.value),purse=Number(document.getElementById('fight-purse-'+m.id)?.value),otherPurse=Number(document.getElementById('fight-opponent-purse-'+m.id)?.value);if(!date||date<addDays(state.date,7)||!slot||opponentId!==a.id||!Number.isFinite(purse)||purse<0||!Number.isFinite(otherPurse)||otherPurse<0)return alert('Check the revised terms and retain the original opponent.');const target=state.events.find(x=>!x.done&&eventDate(x)===date);if(target?.acceptedHold&&target!==e)return alert('The destination event already has a reserved fighter.');if(target&&['Main Event','Co-Main Event'].includes(slot)&&target.bouts.some(x=>x.slot===slot))return alert('Card position already occupied.');if(date!==h.date||slot!==h.slot||otherPurse!==0){delete e.acceptedHold;delete offer.heldToken;offer.agreed={};save();return respondInboxMessage(id,'fight-revise')}if(!Number.isFinite(purse))return;const result=evaluateFightOffer(b,a,{date:h.date,slot:h.slot,weightClass:h.weightClass,title:h.title,purse,attempts:offer.attempts||0});offer.request='purse';offer.requestedPurse=purse;m.revising=false;m.actions=[{id:'fight-accept',label:'Accept counteroffer'},{id:'fight-held-revise',label:'Make another offer'},{id:'fight-close',label:'Withdraw offer'}];return respondInboxMessage(id,'fight-accept')}
  if(!['fight-accept','fight-held-revise'].includes(action))return;
- if(action==='fight-accept'&&offer.request!=='purse')return alert('This counteroffer requires changing the agreed date, card position or opponent. Release the reservation to change those terms, or make a revised purse offer.');
+ if(action==='fight-held-revise'||(action==='fight-accept'&&['date','position'].includes(offer.request))){
+ const date=action==='fight-accept'&&offer.request==='date'?saturdayAfterWeeks(Math.max(1,Math.ceil((offer.minimumNoticeDays||42)/7))):h.date;
+ const slot=action==='fight-accept'&&offer.request==='position'?(h.slot==='Co-Main Event'?'Main Event':'Co-Main Event'):h.slot;
+ Object.assign(offer,{date,slot,rounds:h.rounds,title:h.title,titleType:h.titleType,weightClass:h.weightClass,basePurse:0,purses:{[a.id]:0,[b.id]:0},agreed:{[a.id]:{opponentId:b.id,date:h.date,slot:h.slot,weightClass:h.weightClass,purse:0}}});
+ m.revising=true;m.actions=[{id:'fight-held-submit',label:'Submit revised offer'},{id:'fight-close',label:'Withdraw offer'}];save();render();return;
+ }
+ if(action==='fight-accept'&&offer.request!=='purse')return alert('Make another offer to revise the matchup.');
  const raw=action==='fight-accept'?String(offer.requestedPurse??0):prompt('Additional guaranteed purse for '+b.name+' (above contracted show purse):',String(offer.requestedPurse??0));
  if(raw===null)return;const purse=Number(raw);if(!Number.isFinite(purse)||purse<0)return alert('Enter a valid purse.');
  const result=evaluateFightOffer(b,a,{date:h.date,slot:h.slot,weightClass:h.weightClass,title:h.title,purse,attempts:offer.attempts||0});
@@ -541,7 +548,7 @@ function respondInboxMessage(id,action){const m=ensureInbox().find(x=>x.id===id)
   destination=eventNormalize({...e,id:'event-'+Date.now()+'-'+Math.floor(Math.random()*100000),name:state.player+' Fight Night '+date,date,done:false,bouts:[],results:[],hype:0});
   state.events.push(destination);
  }
- destination.bouts.push({aid:fighter.id,bid:opponent.id,slot,rounds:offer.rounds,title:!!offer.title&&opponent.id===originalOpponent?.id,weightClass,extraFightGuarantees:{[fighter.id]:purse,[opponent.id]:purseFor(opponent)}});
+ destination.bouts.push({aid:fighter.id,bid:opponent.id,slot,rounds:offer.rounds,title:!!offer.title&&opponent.id===originalOpponent?.id,titleType:offer.titleType,weightClass,extraFightGuarantees:{[fighter.id]:purse,[opponent.id]:purseFor(opponent)}});
  sortEventBouts(destination);
  m.status='Resolved';m.read=true;m.revising=false;m.actions=null;m.response='Both fighters accepted. Fight booked on '+destination.name+' for '+date+'.';
  ensureInbox().filter(x=>x!==m&&x.status==='Pending'&&x.fightOffer&&String(x.fightOffer.eventId)===String(e.id)&&[x.fightOffer.aid,x.fightOffer.bid].some(id=>id===fighter.id||id===opponent.id)).forEach(x=>{x.status='Closed';x.response='Matchup superseded by a confirmed booking.'});
