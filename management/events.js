@@ -75,7 +75,54 @@ function fighterBioHTML(id){
  return '<h3 style="margin:0 0 10px">'+esc(f.name)+'</h3><div class="event-fields">'+items.map(([label,value])=>'<div class="feed"><span class="muted">'+esc(label)+'</span><div><strong>'+esc(String(value))+'</strong></div></div>').join('')+'</div>'+gymPanel+divisionControl+attributePanel+hiddenPanel;
 }
 
-const ROSTER_BIO_TABS=[['information','Information'],['attributes','Attributes'],['personality','Personality'],['relationships','Relationships'],['history','Fight History'],['career','Career'],['contract','Contract']];
+
+const TECHNIQUE_GROUPS={
+ Boxing:['Jab','Rear cross','Lead hook','Rear hook','Uppercut','Overhand','Body hook','Shovel hook'],
+ Kicking:['Inside leg kick','Outside leg kick','Calf kick','Body kick','Head kick','Teep','Side kick','Spinning back kick'],
+ Clinch:['Clinch knee','Flying knee','Intercepting knee','Short elbow','Horizontal elbow','Upward elbow','Spinning elbow','Collar tie','Underhook control','Overhook control','Muay Thai plum','Wrist control','Cage pressure'],
+ Wrestling:['Single-leg takedown','Double-leg takedown','High crotch','Ankle pick','Body-lock trip','Mat return','Sprawl'],
+ Grappling:['Guard pass','Sweep','Reversal','Scramble','Back take','Hip escape','Half guard escape','Back escape','Ground strikes'],
+ Submissions:['Rear-naked choke','Guillotine choke','Triangle choke','Arm triangle','D’Arce choke','Anaconda choke','North-south choke','Armbar','Kimura','Americana','Kneebar','Heel hook','Straight ankle lock'],
+ Defence:['Parry','Slip','Roll','Kick check','Frame','Hand fighting','Submission escape']
+};
+const TECHNIQUE_OVERRIDES={
+ 'Alex Pereira':{'Lead hook':[98,96],'Calf kick':[97,96],'Jab':[85,78],'Rear cross':[92,85],'Uppercut':[79,58],'Overhand':[87,64],'Body hook':[84,72],'Shovel hook':[76,42],'Double-leg takedown':[52,18]},
+ 'Sean Strickland':{'Jab':[96,98],'Rear cross':[88,85],'Teep':[88,91],'Lead hook':[78,65],'Parry':[94,94]},
+ 'Charles Oliveira':{'Rear-naked choke':[98,95],'Guillotine choke':[97,96],'Triangle choke':[96,88],'Armbar':[95,85],'Body kick':[87,82]},
+ 'Islam Makhachev':{'Body-lock trip':[97,96],'Arm triangle':[97,92],'Mat return':[96,91],'Single-leg takedown':[95,90]},
+ 'Merab Dvalishvili':{'Single-leg takedown':[96,98],'Double-leg takedown':[96,98],'Mat return':[97,98]},
+ 'Khamzat Chimaev':{'Double-leg takedown':[98,98],'Mat return':[97,96],'Rear-naked choke':[96,94]},
+ 'Max Holloway':{'Jab':[94,96],'Rear cross':[94,94],'Body hook':[94,92]},
+ 'Ilia Topuria':{'Lead hook':[96,94],'Rear cross':[96,94],'Body hook':[95,91]},
+ 'Israel Adesanya':{'Calf kick':[94,91],'Body kick':[95,91],'Rear cross':[94,89],'Slip':[95,94]},
+ 'Valentina Shevchenko':{'Body kick':[95,92],'Head kick':[95,87],'Body-lock trip':[92,85]},
+ 'Zhang Weili':{'Body kick':[92,87],'Double-leg takedown':[91,85],'Ground strikes':[94,92]}
+};
+function ensureTechniqueProfile(f){
+ const profile=f.techniqueProfile||(f.techniqueProfile={});const style=String(ensureFightingStyle(f)).toLowerCase(),t=ensureFighterTendencies(f),skill=Number(f.skill)||60;
+ const clamp=n=>Math.max(0,Math.min(100,Math.round(n)));
+ const hash=k=>{let h=2166136261;for(const c of String(f.id)+'|'+f.name+'|'+k)h=Math.imul(h^c.charCodeAt(0),16777619);return (h>>>0)/4294967295};
+ const tendencies={Boxing:(t.volume+t.counterstriking)/2,Kicking:t.kicking,Clinch:t.clinchPreference,Wrestling:t.takedownDrive,Grappling:(t.scrambling+t.groundAndPound)/2,Submissions:t.submissionHunting,Defence:t.defensiveMovement};
+ for(const [group,names] of Object.entries(TECHNIQUE_GROUPS))for(const name of names){
+ if(profile[name]&&Number.isFinite(profile[name].proficiency)&&Number.isFinite(profile[name].preference))continue;
+ const affinity=Number(tendencies[group])||50,rare=/spinning|flying|heel hook|kneebar|north-south|ankle pick|shovel/.test(name.toLowerCase())?15:0;
+ const override=TECHNIQUE_OVERRIDES[f.name]?.[name];
+ profile[name]={proficiency:override?override[0]:clamp(skill*.78+affinity*.22+(hash(name)-.5)*28-rare),preference:override?override[1]:clamp(affinity+(hash(name+'pref')-.5)*36-rare),basis:override?'Individual gameplay estimate':f.realFighter?'Provisional style estimate':'Generated'};
+ }return profile;
+}
+function techniqueLevel(n){return n>=95?'World-class':n>=85?'Elite':n>=75?'Advanced':n>=65?'Proficient':n>=50?'Competent':n>=35?'Developing':n>=20?'Limited':n>0?'Rudimentary':'Untrained'}
+function techniquePreference(n){return n>=90?'Signature':n>=70?'Preferred':n>=30?'Situational':'Rare'}
+function techniqueBioHTML(f){
+ const p=ensureTechniqueProfile(f),signed=f.promotion===state.player,scout=Number(f.scouted)||0;
+ const visible=(n,v)=>signed||scout>=2||(scout===1&&v.preference>=70)||(!scout&&v.preference>=90&&v.basis==='Individual gameplay estimate');
+ const entries=Object.entries(p).filter(([n,v])=>visible(n,v));
+ const sig=entries.filter(([n,v])=>v.preference>=90).sort((a,b)=>b[1].proficiency-a[1].proficiency).slice(0,5);
+ const color=n=>n>=95?'var(--accent)':n>=85?'var(--good)':n>=65?'#80aadd':n>=50?'#d5b16b':'var(--bad)';
+ const val=(n,label)=>'<span style="color:'+color(n)+'">'+(signed?n:label(n))+'</span>';
+ return '<div class="notice">'+(f.realFighter?'Gameplay assessments; unverified techniques use provisional style estimates.':'Generated individual technique profile.')+'</div><h3 style="margin-top:14px">Signature techniques</h3><p>'+ (sig.map(([n])=>esc(n)).join(' · ')||'Not yet identified')+'</p><h3>Technical overview</h3>'+Object.entries(TECHNIQUE_GROUPS).map(([group,names])=>{const rows=names.filter(n=>visible(n,p[n]));if(!rows.length)return '<details><summary>'+group+'</summary><p class="muted">Further scouting required.</p></details>';return '<details style="border-bottom:1px solid var(--line);padding:10px 0"><summary style="cursor:pointer;font-weight:700">'+group+'</summary><table><thead><tr><th>Technique</th><th>Proficiency</th><th>Preference</th></tr></thead><tbody>'+rows.map(n=>'<tr><td>'+esc(n)+'</td><td>'+val(p[n].proficiency,techniqueLevel)+'</td><td>'+val(p[n].preference,techniquePreference)+'</td></tr>').join('')+'</tbody></table></details>'}).join('');
+}
+
+const ROSTER_BIO_TABS=[['information','Information'],['attributes','Attributes'],['techniques','Techniques'],['personality','Personality'],['relationships','Relationships'],['history','Fight History'],['career','Career'],['contract','Contract']];
 function fighterRelationshipProfile(f){
  if(f.promotion!==state.player)return '';
  const morale=Math.round(Number(ensurePersonalityStates(f).morale||50));
@@ -89,6 +136,7 @@ function relationshipText(value){
  return n<=15?'Hostile':n<=35?'Dislike':n<=64?'Neutral':n<=84?'Positive':'Friends';
 }
 function rosterBioTabContent(f,tab){
+ if(tab==='techniques')return techniqueBioHTML(f);
  const c=(state.contracts||[]).find(x=>x.id===f.id);
  const rows=entries=>'<div class="roster-bio-facts">'+entries.map(([k,v])=>'<div class="roster-bio-fact"><span class="muted">'+esc(k)+'</span><strong>'+(k==='Loyalty'&&tab==='personality'?v:esc(v==null||v===''?'Not recorded':String(v)))+'</strong></div>').join('')+'</div>';
  const bar=n=>'<div class="bar"><i style="width:'+Math.max(0,Math.min(100,Number(n)||0))+'%"></i></div>';
