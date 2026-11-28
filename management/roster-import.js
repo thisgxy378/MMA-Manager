@@ -42,7 +42,7 @@ function crExport(kind){
   const profile=ensureTechniqueProfile(f);
   for(const [category,names] of Object.entries(TECHNIQUE_GROUPS))for(const name of names){
    const v=profile[name]||{};
-   rows.push([f.name,f.gender||'Male',f.promotion,category,name,v.proficiency??'',v.preference??'',v.basis!=='Imported'&&v.basis!=='Individual gameplay estimate'?'true':'false',v.confidence||'',v.sourceNotes||'']);
+   rows.push([f.name,f.gender||'Male',f.promotion,category,name,v.proficiency??'',v.preference??'',v.basis==='Imported'?'false':'true',v.confidence||'',v.sourceNotes||'']);
   }
  }
  crDownload('mma-manager-all-techniques.csv',crMakeCsv(crTechniqueHeaders,rows));return;
@@ -166,7 +166,7 @@ function crApplyRoster(p){
    height:row.height??undefined,weight:row.weight??undefined,reach:row.reach??undefined,
    status:amateur?'Amateur':'Professional',skill,potential:row.potential??Math.min(99,skill+8),popularity:row.popularity??30,
    fightingStyle:row.fightingStyle||'balanced',form:0,scouted:row.promotion===state.player?2:0,
-   salary:Math.round(skill*2400),contract:24,realFighter:real,recordUnverified:false,realRecordVersion:1,
+   salary:Math.round(skill*2400),contract:24,realFighter:real,recordUnverified:row.recordUnverified===undefined?true:crBoolean(row.recordUnverified,true),realRecordVersion:1,
    rosterImportOrigin:'Imported'};
   if(row.techniqueProfile)f.techniqueProfile=row.techniqueProfile;
   state.fighters.push(f);
