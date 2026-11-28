@@ -708,6 +708,7 @@ function recoverFighterDevelopment(f){
 function makeFighter(i){let region=REGION[i%REGION.length],skill=rand(48,76),potential=Math.min(96,skill+rand(4,22));return{id:i+1,name:names[i],nationality:NATIONALITIES[i],promotion:region,division:divisions[i%8],age:rand(20,32),wins:region==='Streetbeefs'?0:rand(1,13),losses:region==='Streetbeefs'?0:rand(0,5),amateurWins:region==='Streetbeefs'?rand(1,13):0,amateurLosses:region==='Streetbeefs'?rand(0,5):0,status:region==='Streetbeefs'?'Amateur':'Professional',gender:'Male',skill,potential,popularity:rand(20,65),scouted:0,salary:rand(25000,125000),contract:rand(6,24),form:0}}
 const REAL_FIGHTERS=[["Alexander Volkanovski","Australia","UFC","Featherweight",37,93],["Islam Makhachev","Russia","UFC","Welterweight",35,96],["Tom Aspinall","United Kingdom","UFC","Heavyweight",33,94],["Alex Pereira","Brazil","UFC","Light Heavyweight",39,94],["Max Holloway","United States","UFC","Lightweight",34,92],["Ilia Topuria","Georgia","UFC","Lightweight",29,96],["Sean O'Malley","United States","UFC","Bantamweight",32,89],["Merab Dvalishvili","Georgia","UFC","Bantamweight",35,94],["Dricus du Plessis","South Africa","UFC","Middleweight",32,91],["Khamzat Chimaev","United Arab Emirates","UFC","Middleweight",32,95],["Israel Adesanya","Nigeria","UFC","Middleweight",37,90],["Zhang Weili","China","UFC","Strawweight",37,93],["Valentina Shevchenko","Kyrgyzstan","UFC","Flyweight",38,93],["Manon Fiorot","France","UFC","Flyweight",36,88],["Erin Blanchfield","United States","UFC","Flyweight",27,89],["Arman Tsarukyan","Armenia","UFC","Lightweight",30,92],["Charles Oliveira","Brazil","UFC","Lightweight",37,90],["Shavkat Rakhmonov","Kazakhstan","UFC","Welterweight",32,92],["Leon Edwards","United Kingdom","UFC","Welterweight",35,88],["Jiri Prochazka","Czech Republic","UFC","Light Heavyweight",34,91],["Francis Ngannou","Cameroon","PFL","Heavyweight",40,93],["Johnny Eblen","United States","PFL","Middleweight",34,89],["Usman Nurmagomedov","Russia","PFL","Lightweight",28,92],["Dakota Ditcheva","United Kingdom","PFL","Flyweight",28,90],["Larissa Pacheco","Brazil","PFL","Featherweight",32,89],["Brendan Loughnane","United Kingdom","PFL","Featherweight",36,85],["Impa Kasanganay","United States","PFL","Light Heavyweight",32,84],["Paul Hughes","Ireland","PFL","Lightweight",29,87],["Anatoly Malykhin","Russia","ONE","Heavyweight",38,92],["Christian Lee","United States","ONE","Lightweight",28,90],["Adriano Moraes","Brazil","ONE","Flyweight",37,87],["Fabricio Andrade","Brazil","ONE","Bantamweight",29,90],["Tang Kai","China","ONE","Featherweight",30,89],["Stamp Fairtex","Thailand","ONE","Atomweight",29,89],["Denice Zamboanga","Philippines","ONE","Atomweight",29,87],["Reinier de Ridder","Netherlands","UFC","Middleweight",36,89],["Roberto de Souza","Brazil","RIZIN","Lightweight",37,88],["Chihiro Suzuki","Japan","RIZIN","Featherweight",27,86],["Kleber Koike Erbst","Brazil","RIZIN","Featherweight",37,85],["Hiromasa Ougikubo","Japan","RIZIN","Bantamweight",39,83],["Kyoji Horiguchi","Japan","UFC","Flyweight",36,89],["Seika Izawa","Japan","RIZIN","Atomweight",29,89],["Salahdine Parnasse","France","KSW","Lightweight",28,90],["Mamed Khalidov","Poland","KSW","Middleweight",46,84],["Losene Keita","Guinea","OKTAGON MMA","Featherweight",28,87],["Christian Jungwirth","Germany","OKTAGON MMA","Welterweight",39,79],["Mason Jones","United Kingdom","Cage Warriors","Lightweight",31,84],["Caolan Loughran","Ireland","PFL","Bantamweight",30,77],["Carlos Prates","Brazil","UFC","Welterweight",33,87],["Jack Della Maddalena","Australia","UFC","Welterweight",30,92]];
 function applyRealFighterRecord(f){
+ if(f.rosterImportOrigin==='Imported')return;
  const record=REAL_FIGHTER_RECORDS[f.name];
  if(!record)return;
  // Only migrate once. Count simulated fights already played so career progress survives.
@@ -755,6 +756,8 @@ const UFC_NOV2026_RECORD_BATCH_1={"Brandon Moreno":[24,10,2,0],"Amir Albazi":[17
 function applyNovember2026UFCRecordBatch1(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_1[f.name];if(!r||f.promotion!=='UFC'||f.nov2026RecordBatch1)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -766,6 +769,8 @@ const UFC_NOV2026_RECORD_BATCH_2={"Deiveson Figueiredo":[25,7,1,0],"Cory Sandhag
 function applyNovember2026UFCRecordBatch2(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_2[f.name];if(!r||f.promotion!=='UFC'||f.nov2026RecordBatch2)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -777,6 +782,8 @@ const UFC_NOV2026_RECORD_BATCH_3={"Dan Hooker":[24,15,0,0],"Mateusz Gamrot":[26,
 function applyNovember2026UFCRecordBatch3(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_3[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch3)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -788,6 +795,8 @@ const UFC_NOV2026_RECORD_BATCH_4={"Rob Font":[22,10,0,0],"Henry Cejudo":[16,6,0,
 function applyNovember2026UFCRecordBatch4(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_4[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch4)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -799,6 +808,8 @@ const UFC_NOV2026_RECORD_BATCH_5={"Benoit Saint Denis":[17,4,0,1],"Rafael Fiziev
 function applyNovember2026UFCRecordBatch5(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_5[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch5)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -810,6 +821,8 @@ const UFC_NOV2026_RECORD_BATCH_6={"Renato Moicano":[21,8,1,0],"Maycee Barber":[1
 function applyNovember2026UFCRecordBatch6(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_6[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch6)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -821,6 +834,8 @@ const UFC_NOV2026_RECORD_BATCH_7={"Amanda Lemos":[15,7,1,0],"Jared Cannonier":[1
 function applyNovember2026UFCRecordBatch7(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_7[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch7)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -832,6 +847,8 @@ const UFC_NOV2026_RECORD_BATCH_8={"Roman Dolidze":[15,6,0,0],"Marcin Tybura":[27
 function applyNovember2026UFCRecordBatch8(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_8[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch8)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -843,6 +860,8 @@ const UFC_NOV2026_RECORD_BATCH_9={"Dan Ige":[19,10,0,0],"Jamahal Hill":[12,4,0,1
 function applyNovember2026UFCRecordBatch9(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=UFC_NOV2026_RECORD_BATCH_9[f.name];if(!r||!f.realFighter||f.nov2026RecordBatch9)continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -854,6 +873,8 @@ const CROSS_PROMOTION_RECORDS_20261114={"Vadim Nemkov":[20,2,0,1],"Corey Anderso
 function applyCrossPromotionRecords20261114(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   const r=CROSS_PROMOTION_RECORDS_20261114[f.name];if(!r||!f.realFighter||f.crossPromotionRecordSnapshot==='2026-11-14')continue;
   const bouts=(f.potentialHistory||[]).filter(x=>typeof x.won==='boolean');
   const wins=bouts.filter(x=>x.won).length,losses=bouts.length-wins;
@@ -868,6 +889,8 @@ const COMPLETE_PRO_RECORD_SNAPSHOT_20261114={"Mason Jones":[18,3,0,1],"Sara Luza
 function applyCompleteProRecordSnapshot20261114(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   if(!f.realFighter||f.completeProRecordSnapshot==='2026-11-14')continue;
   const r=COMPLETE_PRO_RECORD_SNAPSHOT_20261114[f.name];
   if(!r)continue;
@@ -882,6 +905,8 @@ function applyCompleteProRecordSnapshot20261114(){
 function applyVerifiedUFCCareerRecords(){
  if(!state?.fighters)return;
  for(const f of state.fighters){
+  // Preserve records explicitly supplied through the in-career roster importer.
+  if(f.rosterImportOrigin==='Imported')continue;
   if(f.promotion!=='UFC')continue;
   const r=UFC_VERIFIED_CAREER_RECORDS[f.name]||UFC_VERIFIED_CAREER_RECORDS[{'Natália Silva':'Natalia Silva','Jiří Procházka':'Jiri Prochazka','Julianna Peña':'Julianna Pena'}[f.name]];
   if(!r||f.ufcRecordSnapshot==='2026-11-12')continue;
@@ -1410,4 +1435,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="social2.js?v=scheduled-coverage-2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=technique-profiles-1"></script><script src="roster-import.js?v=career-import-1"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="social2.js?v=scheduled-coverage-2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=technique-profiles-1"></script><script src="roster-import.js?v=career-import-2"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
