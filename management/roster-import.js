@@ -49,11 +49,11 @@ function crExport(kind){
  }
  crDownload('mma-manager-current-roster.csv',crMakeCsv(crRosterHeaders,state.fighters.map(f=>crRosterHeaders.map(h=>f[h]??''))));
 }
-function crResolveFighter(row){
+function crResolveFighter(row,index){
  const name=String(crColumn(row,'fighter','name')??'').trim();
  if(!name)return {error:'Missing fighter name'};
  const gender=crColumn(row,'gender'),promo=crColumn(row,'promotion');
- let candidates=state.fighters.filter(f=>crKey(f.name)===crKey(name));
+ let candidates=index.get(crKey(name))||[];
  if(gender!==undefined&&String(gender).trim())candidates=candidates.filter(f=>crKey(f.gender||'Male')===crKey(gender));
  if(candidates.length>1&&promo!==undefined&&String(promo).trim())candidates=candidates.filter(f=>crKey(f.promotion)===crKey(promo));
  if(!candidates.length)return {missing:name};
@@ -63,6 +63,7 @@ function crResolveFighter(row){
 function crParseTechnique(rows){
  if(!Array.isArray(rows)||!rows.length)throw Error('Technique file contains no rows.');
  if(rows.length>crLimits.techniques)throw Error('Too many technique rows (limit '+crLimits.techniques+').');
+ const index=new Map();for(const f of state.fighters){const key=crKey(f.name);if(!index.has(key))index.set(key,[]);index.get(key).push(f)}
  const known=new Map();
  for(const [group,names] of Object.entries(TECHNIQUE_GROUPS))for(const name of names)known.set(crKey(name),{group,name});
  const ops=[],skipped=new Set(),duplicates=new Set(),errors=[],fighters=new Set();
@@ -79,7 +80,7 @@ function crParseTechnique(rows){
    pref=crInt(crColumn(row,'preference'),rowLabel+' preference');
    provisional=crBoolean(crColumn(row,'provisional'),true);
   }catch(e){errors.push(e.message);return}
-  const matched=crResolveFighter(row);
+  const matched=crResolveFighter(row,index);
   if(matched.error){errors.push(rowLabel+': '+matched.error);return}
   if(matched.missing){skipped.add(matched.missing);return}
   const key=matched.fighter.id+'|'+technique.name;
@@ -109,6 +110,7 @@ function crParseRoster(rows,filename){
  const parsed=prepareRosterImport(JSON.stringify(rows),'roster.json');
  if(parsed.length>crLimits.roster)throw Error('Roster exceeds '+crLimits.roster+' fighters.');
  const errors=[],existing=[],add=[],allowedPromos=new Set([...Object.keys(PROMOS),...REGION,'Free Agent']);
+ const index=new Map();for(const f of state.fighters){const key=crKey(f.name)+'|'+crKey(f.gender||'Male');if(!index.has(key))index.set(key,[]);index.get(key).push(f)}
  parsed.forEach((f,i)=>{
   const label='Row '+(i+2);
   if(!DIVISIONS_BY_GENDER[f.gender]?.includes(f.division))errors.push(label+': invalid '+f.gender+' division '+f.division);
@@ -117,7 +119,7 @@ function crParseRoster(rows,filename){
   for(const field of ['wins','losses','draws','age'])if(f[field]!==undefined&&f[field]!=='')try{f[field]=crInt(f[field],label+' '+field,0,300)}catch(e){errors.push(e.message)}
   try{if(f.realFighter!==undefined)f.realFighter=crBoolean(f.realFighter)}catch(e){errors.push(label+': '+e.message)}
   try{if(f.techniqueProfile!==undefined)f.techniqueProfile=crValidateProfile(f.techniqueProfile,label)}catch(e){errors.push(e.message)}
-  const matches=state.fighters.filter(x=>crKey(x.name)===crKey(f.name)&&crKey(x.gender||'Male')===crKey(f.gender));
+  const matches=index.get(crKey(f.name)+'|'+crKey(f.gender))||[];
   if(matches.length>1)errors.push(label+': ambiguous existing fighter '+f.name);
   else if(matches.length)existing.push({fighterId:matches[0].id,row:f});
   else add.push(f);
@@ -154,9 +156,9 @@ function careerRosterPanelHTML(){
  '<p class="muted" style="margin-top:12px">A full career backup is downloaded before importing. Use Import career to restore it if needed. Imports are local to this save and do not change the GitHub master roster.</p></section>';
 }
 function crApplyRoster(p){
- let countAdd=0,countUpdated=0;const nextId=()=>Math.max(0,...state.fighters.map(x=>Number(x.id)||0))+1;
+ let countAdd=0,countUpdated=0;let nextId=Math.max(0,...state.fighters.map(x=>Number(x.id)||0))+1;
  for(const row of p.add){
-  const id=nextId(),real=row.realFighter===undefined?REAL_FIGHTERS.some(x=>crKey(x[0])===crKey(row.name)):row.realFighter;
+  const id=nextId++,real=row.realFighter===undefined?REAL_FIGHTERS.some(x=>crKey(x[0])===crKey(row.name)):row.realFighter;
   const skill=Number(row.skill)||60,amateur=row.promotion==='Streetbeefs';
   const f={id,name:row.name,gender:row.gender,promotion:row.promotion,division:row.division,
    nationality:row.nationality||'Unknown',age:row.age??25,wins:amateur?0:row.wins??0,losses:amateur?0:row.losses??0,draws:row.draws??0,
@@ -203,7 +205,7 @@ function crRunImport(){
   state=JSON.parse(snapshot);
   const stats=p.kind==='roster'?crApplyRoster(p):crApplyTechnique(p);
   save();
-  if(localStorage.getItem('mma_gm_management_v01')===null)throw Error('Local save failed. Check available browser storage.');
+  if(localStorage.getItem('mma_gm_management_v01')!==JSON.stringify(state))throw Error('Local save failed (possibly browser storage full). The current career was restored.');
   crPending=null;crError='';render();
   alert('Import successful: '+(p.kind==='roster'?stats.added+' added, '+stats.updated+' profiles updated.':stats.ratings+' ratings across '+stats.affected+' fighters.'+(stats.skipped?' '+stats.skipped+' names skipped.':'')));
  }catch(err){
