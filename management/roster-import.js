@@ -199,6 +199,7 @@ function crApplyMaster(p){
   if(Object.keys(op.attr).length){
    Object.assign(ensureFighterAttributes(f),op.attr);
    f.researchAttributeVersion=REAL_RESEARCH_PROFILE_VERSION;
+   f.deepResearchAttributeVersion='deep-research-2026-11-13';
    syncFighterAbility(f);
   }
   if(Object.keys(op.personality).length){
@@ -207,6 +208,7 @@ function crApplyMaster(p){
   if(Object.keys(op.tendencies).length){
    Object.assign(ensureFighterTendencies(f),op.tendencies);
    f.fightBehaviourProfileVersion=REAL_RESEARCH_PROFILE_VERSION;
+   f.deepResearchTendencyVersion='deep-research-2026-11-13';
   }
   if(Object.keys(op.technique).length){
    const profile=ensureTechniqueProfile(f);
