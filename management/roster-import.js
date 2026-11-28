@@ -43,6 +43,59 @@ function crMasterSchema(){
  if(new Set(headers).size!==headers.length)throw Error('Master CSV field collision; check game technique names.');
  return {base,attrs,personality,tendencies,tech,headers};
 }
+
+/* New career imports can use the same 223-column CSV without depending on a loaded save. */
+function crStartingMasterRoster(rows){
+ if(!Array.isArray(rows)||!rows.length||rows.length>crLimits.roster)throw Error('Master roster must contain 1 to 15,000 fighters.');
+ const sch=crMasterSchema(),valid=new Set(sch.headers),errors=[],seen=new Set(),out=[];
+ for(const col of Object.keys(rows[0]||{}))if(!valid.has(col))errors.push('Unknown master column "'+col+'".');
+ if(errors.length)throw Error(errors.slice(0,6).join('; '));
+ rows.forEach((row,i)=>{
+  const ctx='Row '+(i+2);
+  try{
+   if(!row||typeof row!=='object'||Array.isArray(row))throw Error(ctx+': invalid row');
+   const name=String(row.name||'').trim(),gender=String(row.gender||'').trim(),division=String(row.division||'').trim(),promotion=String(row.promotion||'').trim();
+   if(!name||!['Male','Female'].includes(gender)||!DIVISIONS_BY_GENDER[gender]?.includes(division))
+    throw Error(ctx+': valid name, gender and division are required');
+   if(![...Object.keys(PROMOS),...REGION,'Free Agent'].includes(promotion))throw Error(ctx+': unknown promotion '+promotion);
+   const key=crKey(name)+'|'+crKey(gender);if(seen.has(key))throw Error(ctx+': duplicate fighter '+name);seen.add(key);
+   const f={name,gender,division,promotion,rosterImportOrigin:'Imported',recordUnverified:true};
+   if(crMasterPresent(row,'nationality'))f.nationality=String(row.nationality).trim().slice(0,100);
+   for(const key of ['age','wins','losses','draws','skill','potential','popularity']){
+    const value=crMasterNumber(row,key,ctx,['wins','losses','draws'].includes(key)?999:key==='age'?120:100);
+    if(value!==undefined)f[key]=value;
+   }
+   for(const key of ['height','weight','reach']){
+    const value=crMasterPhysical(row,key,ctx);if(value!==undefined)f[key]=value;
+   }
+   if(crMasterPresent(row,'fightingStyle')){
+    if(!Object.hasOwn(FIGHTING_STYLES,row.fightingStyle))throw Error(ctx+': unknown fighting style '+row.fightingStyle);
+    f.fightingStyle=row.fightingStyle;f.manualFightingStyle=true;
+   }
+   if(crMasterPresent(row,'realFighter'))f.realFighter=crBoolean(row.realFighter);
+   const attributes={},personality={},tendencies={},techniques={};
+   for(const item of sch.attrs){const value=crMasterNumber(row,item.column,ctx);if(value!==undefined)attributes[item.key]=value}
+   for(const item of sch.personality){const value=crMasterNumber(row,item.column,ctx);if(value!==undefined)personality[item.key]=value}
+   for(const item of sch.tendencies){const value=crMasterNumber(row,item.column,ctx);if(value!==undefined)tendencies[item.key]=value}
+   for(const item of sch.tech){
+    const prof=crMasterNumber(row,item.proficiency,ctx),pref=crMasterNumber(row,item.preference,ctx);
+    if(prof!==undefined||pref!==undefined)techniques[item.name]={...(prof!==undefined?{proficiency:prof}:{}),...(pref!==undefined?{preference:pref}:{})};
+   }
+   if(Object.keys(attributes).length){
+    f.attributes=attributes;f.researchAttributeVersion=REAL_RESEARCH_PROFILE_VERSION;f.deepResearchAttributeVersion='deep-research-2026-11-13';
+   }
+   if(Object.keys(personality).length)f.hiddenPersonalityFactors=personality;
+   if(Object.keys(tendencies).length){
+    f.hiddenTendencies=tendencies;f.fightBehaviourProfileVersion=REAL_RESEARCH_PROFILE_VERSION;f.deepResearchTendencyVersion='deep-research-2026-11-13';
+   }
+   if(Object.keys(techniques).length)f.masterTechniquePatches=techniques;
+   out.push(f);
+  }catch(e){errors.push(e.message)}
+ });
+ if(errors.length)throw Error(errors.slice(0,8).join('; ')+(errors.length>8?' (and '+(errors.length-8)+' more)':''));
+ return out;
+}
+
 function crMasterData(f,sch){
  const attrs=ensureFighterAttributes(f),ps=f.hiddenPersonalityFactors||(ensureFighterPersonality(f),f.hiddenPersonalityFactors);
  const t=ensureFighterTendencies(f),p=ensureTechniqueProfile(f);
@@ -59,7 +112,7 @@ function crMasterData(f,sch){
  }return values;
 }
 function crMasterExport(template=false){
- if(!state)return;
+ if(!template&&!state)return;
  const sch=crMasterSchema();
  if(template){
   const blank=Object.fromEntries(sch.headers.map(h=>[h,'']));
