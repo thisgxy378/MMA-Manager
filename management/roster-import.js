@@ -318,20 +318,28 @@ function crPrepare(raw,filename){
 function careerRosterPanelHTML(){
  if(!state)return '';
  const p=crPending;
- const details=p?(p.kind==='roster'
-  ?'<strong>'+p.total+' fighter rows:</strong> '+p.add.length+' new, '+p.existing.length+' already present. '+(crMode==='add'?'Existing fighters will not be changed.':'Existing fighters will receive only biographical, potential, popularity and technique updates.')
-  :'<strong>'+p.ops.length+' technique ratings</strong> across '+p.matchedFighters+' fighters.'+(p.skipped.length?'<p style="color:var(--accent)">Skipped '+p.skipped.length+' unknown fighters: '+p.skipped.slice(0,8).map(esc).join(', ')+(p.skipped.length>8?'…':'')+'</p>':''))
-  :'';
+ let details='';
+ if(p?.kind==='master'){
+  const c=p.counts;
+  details='<strong>'+p.total+' fighters:</strong> '+c.newFighters+' new, '+c.existing+' matched. Proposed changes: '+c.roster+' roster fields, '+c.attributes+' combat attributes, '+c.personality+' personality factors, '+c.tendencies+' tendencies and '+c.techniques+' technique ratings.'+(c.records?'<p><strong>'+c.records+' record changes</strong> (ignored unless expressly enabled below).</p>':'');
+ }else if(p?.kind==='roster')details='<strong>'+p.total+' fighter rows:</strong> '+p.add.length+' new, '+p.existing.length+' already present. '+(crMode==='add'?'Existing fighters will not change.':'Only safe biographical, potential and popularity edits will apply.');
+ else if(p?.kind==='technique')details='<strong>'+p.ops.length+' technique ratings</strong> across '+p.matchedFighters+' fighters.'+(p.skipped.length?'<p style="color:var(--accent)">Skipped '+p.skipped.length+' unknown fighters: '+p.skipped.slice(0,8).map(esc).join(', ')+(p.skipped.length>8?'…':'')+'</p>':'');
+ const options=p?.kind==='master'
+  ?'<p class="muted">Existing fighter IDs, names, divisions, genders and promotions cannot be changed in this CSV. Ability is calculated from combat attributes; existing records are protected by default.</p>'+
+   '<label class="row" style="justify-content:flex-start;gap:10px"><input type="checkbox" id="crMasterRecords"'+(crMasterUpdateRecords?' checked':'')+'><span>Replace existing win/loss/draw records from CSV (advanced; use only to correct records intentionally)</span></label>'
+  :p?.kind==='roster'
+  ?'<label>Existing fighters <select id="crMode"><option value="add"'+(crMode==='add'?' selected':'')+'>Skip existing (add only)</option><option value="update"'+(crMode==='update'?' selected':'')+'>Update existing profiles safely</option></select></label><p class="muted">Existing fighter IDs, records, contracts, promotions, divisions and active bookings stay unchanged.</p>'
+  :'<p class="muted">Only matched fighters will change; absent fighters are listed as skipped.</p>';
  return '<section class="panel" style="max-width:850px;margin-top:16px"><h2>Import & export fighter database</h2>'+
  '<p class="muted">Use one master CSV to manage roster information, combat attributes, personality factors, fighter tendencies and all 65 technique proficiency/preference pairs. Older simple roster and technique CSV files remain supported.</p>'+
  '<div class="row" style="flex-wrap:wrap"><button id="crChoose">Choose CSV / JSON</button><input type="file" id="crFile" accept=".csv,.json,text/csv,application/json" hidden>'+
  '<button id="crTemplateMaster">Master CSV template</button><button id="crTemplateRoster">Roster CSV template</button><button id="crTemplateTechnique">Technique CSV template</button></div>'+
- '<div class="row" style="flex-wrap:wrap;margin-top:10px"><button class="primary" id="crExportMaster">Export complete master CSV</button><button id="crExportRoster">Export roster CSV</button><button id="crExportTechnique">Export technique CSV</button></div><p class="muted">Master CSV uses one fighter per row. Edit in Excel, save as CSV UTF-8, then import it. Empty rating cells preserve existing values.</p>'+
- (p?'<div class="notice" style="margin-top:16px"><strong>Import preview: '+esc(p.filename)+'</strong><p>'+details+'</p>'+
- (p.kind==='roster'?'<label>Existing fighters <select id="crMode"><option value="add"'+(crMode==='add'?' selected':'')+'>Skip existing (add only)</option><option value="update"'+(crMode==='update'?' selected':'')+'>Update existing profiles safely</option></select></label><p class="muted">Existing fighter IDs, records, contracts, promotions, weight classes and active bookings stay unchanged.</p>':'<p class="muted">Only matched fighters will change; absent fighters are listed as skipped.</p>')+
+ '<div class="row" style="flex-wrap:wrap;margin-top:10px"><button class="primary" id="crExportMaster">Export complete master CSV</button><button id="crExportRoster">Export roster CSV</button><button id="crExportTechnique">Export technique CSV</button></div>'+
+ '<p class="muted">Master CSV has one row per fighter. Edit in Excel, save as CSV UTF-8, then import. Empty rating cells preserve existing values.</p>'+
+ (p?'<div class="notice" style="margin-top:16px"><strong>Import preview: '+esc(p.filename)+'</strong><p>'+details+'</p>'+options+
  '<div class="row" style="margin-top:12px"><button class="primary" id="crApply">Confirm import</button><button id="crCancel">Cancel</button></div></div>':'')+
  (crError?'<p class="notice" style="color:var(--bad);margin-top:12px">'+esc(crError)+'</p>':'')+
- '<p class="muted" style="margin-top:12px">A full career backup is downloaded before importing. Use Import career to restore it if needed. Imports are local to this save and do not change the GitHub master roster.</p></section>';
+ '<p class="muted" style="margin-top:12px">A complete career backup downloads before importing. Use Import career to restore it. Changes are local to this career, not the default GitHub roster.</p></section>';
 }
 function crApplyRoster(p){
  let countAdd=0,countUpdated=0;let nextId=Math.max(0,...state.fighters.map(x=>Number(x.id)||0))+1;
@@ -375,17 +383,19 @@ function crApplyTechnique(p){
 }
 function crRunImport(){
  const p=crPending;if(!p)return;
- const summary=p.kind==='roster'?p.add.length+' new and '+(crMode==='update'?p.existing.length:0)+' existing fighter profiles':' '+p.ops.length+' technique ratings for '+p.matchedFighters+' fighters';
+ const summary=p.kind==='master'?p.counts.newFighters+' new fighters, '+p.counts.existing+' existing fighter profiles and '+p.counts.techniques+' technique rating edits'+(crMasterUpdateRecords?' plus '+p.counts.records+' record changes':'')
+ :p.kind==='roster'?p.add.length+' new and '+(crMode==='update'?p.existing.length:0)+' existing fighter profiles'
+ :p.ops.length+' technique ratings for '+p.matchedFighters+' fighters';
  if(!confirm('Apply '+summary+' to this career? A full backup will be downloaded first.'))return;
  const snapshot=JSON.stringify(state),before=state;
  try{
   crDownload('MMA-Manager-BACKUP-before-import-'+state.date+'.json',JSON.stringify({format:'MMA-Manager-Career',version:1,career:state},null,2),'application/json');
   state=JSON.parse(snapshot);
-  const stats=p.kind==='roster'?crApplyRoster(p):crApplyTechnique(p);
+  const stats=p.kind==='master'?crApplyMaster(p):p.kind==='roster'?crApplyRoster(p):crApplyTechnique(p);
   save();
   if(localStorage.getItem('mma_gm_management_v01')!==JSON.stringify(state))throw Error('Local save failed (possibly browser storage full). The current career was restored.');
   crPending=null;crError='';render();
-  alert('Import successful: '+(p.kind==='roster'?stats.added+' added, '+stats.updated+' profiles updated.':stats.ratings+' ratings across '+stats.affected+' fighters.'+(stats.skipped?' '+stats.skipped+' names skipped.':'')));
+  alert('Import successful: '+(p.kind==='master'?stats.added+' added, '+stats.updated+' updated; '+stats.recordCount+' existing record fields changed.':p.kind==='roster'?stats.added+' added, '+stats.updated+' profiles updated.':stats.ratings+' ratings across '+stats.affected+' fighters.'+(stats.skipped?' '+stats.skipped+' names skipped.':'')));
  }catch(err){
   state=before;crError='Import failed; changes rolled back: '+String(err.message||err);
   try{localStorage.setItem('mma_gm_management_v01',snapshot)}catch(e){}
