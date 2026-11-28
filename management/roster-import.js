@@ -207,11 +207,13 @@ function crApplyMaster(p){
 let crMasterUpdateRecords=false;
 
 function crTemplate(kind){
+ if(kind==='master')return crMasterExport(true);
  if(kind==='technique')crDownload('mma-manager-technique-template.csv',crMakeCsv(crTechniqueHeaders,[['Example Fighter','Male','UFC','Boxing','Jab',82,94,'true','Low','Illustrative only']]));
  else crDownload('mma-manager-roster-template.csv',crMakeCsv(crRosterHeaders,[['Example Fighter','Male','Lightweight','UFC','New Zealand',26,5,1,0,65,78,30,'boxer','true']]));
 }
 function crExport(kind){
  if(!state)return;
+ if(kind==='master')return crMasterExport(false);
  if(kind==='technique'){
  const rows=[];
  for(const f of state.fighters){
@@ -309,8 +311,8 @@ function crPrepare(raw,filename){
  if(parsed?.format==='MMA-Manager-Career')throw Error('This is a career save. Use Import career in the top toolbar instead.');
  const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.fighters)?parsed.fighters:Array.isArray(parsed?.techniques)?parsed.techniques:null;
  if(!rows||!rows.length)throw Error('File must contain a nonempty fighter or technique list.');
- const sample=rows[0]||{},isTechnique=crColumn(sample,'technique')!==undefined;
- const preview=isTechnique?crParseTechnique(rows):crParseRoster(rows,filename);
+ const sample=rows[0]||{},isMaster=Object.keys(sample).some(k=>k==='fighterId'||/^(attr|personality|tendency|tech)\./.test(k)),isTechnique=crColumn(sample,'technique')!==undefined;
+ const preview=isMaster?crParseMaster(rows):isTechnique?crParseTechnique(rows):crParseRoster(rows,filename);
  return {...preview,filename};
 }
 function careerRosterPanelHTML(){
@@ -321,10 +323,10 @@ function careerRosterPanelHTML(){
   :'<strong>'+p.ops.length+' technique ratings</strong> across '+p.matchedFighters+' fighters.'+(p.skipped.length?'<p style="color:var(--accent)">Skipped '+p.skipped.length+' unknown fighters: '+p.skipped.slice(0,8).map(esc).join(', ')+(p.skipped.length>8?'…':'')+'</p>':''))
   :'';
  return '<section class="panel" style="max-width:850px;margin-top:16px"><h2>Import & export fighter database</h2>'+
- '<p class="muted">Import CSV/JSON into this career without deleting fighters, contracts, fight bookings or results. Technique imports update individual proficiency and preference ratings.</p>'+
+ '<p class="muted">Use one master CSV to manage roster information, combat attributes, personality factors, fighter tendencies and all 65 technique proficiency/preference pairs. Older simple roster and technique CSV files remain supported.</p>'+
  '<div class="row" style="flex-wrap:wrap"><button id="crChoose">Choose CSV / JSON</button><input type="file" id="crFile" accept=".csv,.json,text/csv,application/json" hidden>'+
- '<button id="crTemplateRoster">Roster CSV template</button><button id="crTemplateTechnique">Technique CSV template</button></div>'+
- '<div class="row" style="flex-wrap:wrap;margin-top:10px"><button id="crExportRoster">Export roster CSV</button><button id="crExportTechnique">Export technique CSV</button></div>'+
+ '<button id="crTemplateMaster">Master CSV template</button><button id="crTemplateRoster">Roster CSV template</button><button id="crTemplateTechnique">Technique CSV template</button></div>'+
+ '<div class="row" style="flex-wrap:wrap;margin-top:10px"><button class="primary" id="crExportMaster">Export complete master CSV</button><button id="crExportRoster">Export roster CSV</button><button id="crExportTechnique">Export technique CSV</button></div><p class="muted">Master CSV uses one fighter per row. Edit in Excel, save as CSV UTF-8, then import it. Empty rating cells preserve existing values.</p>'+
  (p?'<div class="notice" style="margin-top:16px"><strong>Import preview: '+esc(p.filename)+'</strong><p>'+details+'</p>'+
  (p.kind==='roster'?'<label>Existing fighters <select id="crMode"><option value="add"'+(crMode==='add'?' selected':'')+'>Skip existing (add only)</option><option value="update"'+(crMode==='update'?' selected':'')+'>Update existing profiles safely</option></select></label><p class="muted">Existing fighter IDs, records, contracts, promotions, weight classes and active bookings stay unchanged.</p>':'<p class="muted">Only matched fighters will change; absent fighters are listed as skipped.</p>')+
  '<div class="row" style="margin-top:12px"><button class="primary" id="crApply">Confirm import</button><button id="crCancel">Cancel</button></div></div>':'')+
@@ -402,7 +404,8 @@ function careerRosterBind(){
   render();
  };
  const mode=document.getElementById('crMode');if(mode)mode.onchange=()=>{crMode=mode.value;render()};
- const map={crTemplateRoster:()=>crTemplate('roster'),crTemplateTechnique:()=>crTemplate('technique'),
+ const recordToggle=document.getElementById('crMasterRecords');if(recordToggle)recordToggle.onchange=()=>{crMasterUpdateRecords=recordToggle.checked;render()};
+ const map={crTemplateMaster:()=>crTemplate('master'),crExportMaster:()=>crExport('master'),crTemplateRoster:()=>crTemplate('roster'),crTemplateTechnique:()=>crTemplate('technique'),
  crExportRoster:()=>crExport('roster'),crExportTechnique:()=>crExport('technique'),
  crApply:crRunImport,crCancel:()=>{crPending=null;crError='';render()}};
  for(const [id,fn] of Object.entries(map)){const el=document.getElementById(id);if(el)el.onclick=fn}
