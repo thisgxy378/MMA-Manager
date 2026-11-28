@@ -75,7 +75,16 @@ function crMasterExport(template=false){
 function crMasterPresent(row,key){const v=row[key];return v!==undefined&&v!==null&&String(v).trim()!==''}
 function crMasterNumber(row,key,context,max=100){
  if(!crMasterPresent(row,key))return undefined;
- return crInt(row[key],context+' '+key,0,max);
+ const v=Number(row[key]);
+ if(!Number.isFinite(v)||v<0||v>max||!Number.isInteger(v))throw Error(context+' '+key+' must be an integer between 0 and '+max);
+ return v;
+}
+function crMasterPhysical(row,key,context){
+ if(!crMasterPresent(row,key))return undefined;
+ const v=String(row[key]).trim();
+ if(v.length>32)throw Error(context+' '+key+' is too long');
+ if(/^[0-9]+(?:\.[0-9]+)?$/.test(v)){const n=Number(v);if(n>400)throw Error(context+' '+key+' exceeds maximum 400');return n}
+ return v;
 }
 function crParseMaster(rows){
  if(!Array.isArray(rows)||!rows.length)throw Error('The master CSV has no fighters.');
@@ -122,8 +131,12 @@ function crParseMaster(rows){
   }
   const safe={},attr={},personality={},tendencies={},technique={};let records={};
   try{
-   for(const key of ['age','height','weight','reach','potential','popularity']){
-    const value=crMasterNumber(row,key,ctx,key==='age'?120:key==='height'||key==='weight'||key==='reach'?400:100);
+   for(const key of ['age','potential','popularity']){
+    const value=crMasterNumber(row,key,ctx,key==='age'?120:100);
+    if(value!==undefined)safe[key]=value;
+   }
+   for(const key of ['height','weight','reach']){
+    const value=crMasterPhysical(row,key,ctx);
     if(value!==undefined)safe[key]=value;
    }
    for(const key of ['wins','losses','draws']){const val=crMasterNumber(row,key,ctx,999);if(val!==undefined)records[key]=val}
@@ -182,6 +195,7 @@ function crApplyMaster(p){
   if(crMasterUpdateRecords&&op.fighterId&&Object.keys(op.records).length){
    Object.assign(f,op.records);f.rosterImportOrigin='Imported';f.recordUnverified=true;recordCount+=Object.keys(op.records).length;
   }
+  if(op.safe.fightingStyle){f.fightingStyle=op.safe.fightingStyle;f.manualFightingStyle=true}
   if(Object.keys(op.attr).length){
    Object.assign(ensureFighterAttributes(f),op.attr);
    f.researchAttributeVersion=REAL_RESEARCH_PROFILE_VERSION;
@@ -394,7 +408,7 @@ function crRunImport(){
   const stats=p.kind==='master'?crApplyMaster(p):p.kind==='roster'?crApplyRoster(p):crApplyTechnique(p);
   save();
   if(localStorage.getItem('mma_gm_management_v01')!==JSON.stringify(state))throw Error('Local save failed (possibly browser storage full). The current career was restored.');
-  crPending=null;crError='';render();
+  crPending=null;crError='';crMasterUpdateRecords=false;render();
   alert('Import successful: '+(p.kind==='master'?stats.added+' added, '+stats.updated+' updated; '+stats.recordCount+' existing record fields changed.':p.kind==='roster'?stats.added+' added, '+stats.updated+' profiles updated.':stats.ratings+' ratings across '+stats.affected+' fighters.'+(stats.skipped?' '+stats.skipped+' names skipped.':'')));
  }catch(err){
   state=before;crError='Import failed; changes rolled back: '+String(err.message||err);
@@ -409,7 +423,7 @@ function careerRosterBind(){
   const item=e.target.files?.[0];if(!item)return;
   try{
    if(item.size>crLimits.fileBytes)throw Error('File exceeds 12 MB. Split into smaller batches.');
-   crPending=crPrepare(await item.text(),item.name);crError='';
+   crPending=crPrepare(await item.text(),item.name);crMasterUpdateRecords=false;crError='';
   }catch(err){crPending=null;crError=String(err.message||err)}
   render();
  };
