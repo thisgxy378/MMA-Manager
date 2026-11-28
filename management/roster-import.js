@@ -444,7 +444,7 @@ function careerRosterPanelHTML(){
  '<div class="row" style="flex-wrap:wrap"><button id="crChoose">Choose CSV / JSON</button><input type="file" id="crFile" accept=".csv,.json,text/csv,application/json" hidden>'+
  '<button id="crTemplateMaster">Master CSV template</button><button id="crTemplateRoster">Roster CSV template</button><button id="crTemplateTechnique">Technique CSV template</button></div>'+
  '<div class="row" style="flex-wrap:wrap;margin-top:10px"><button class="primary" id="crExportMaster">Export complete master CSV</button><button id="crExportRoster">Export roster CSV</button><button id="crExportTechnique">Export technique CSV</button></div>'+
- '<p class="muted">Master CSV has one row per fighter. Edit in Excel, save as CSV UTF-8, then import. Empty rating cells preserve existing values.</p>'+
+ '<p class="muted">Master CSV has one row per fighter. The five calc.* columns are Excel formulas: striking 30%, grappling 30%, health 20%, mental 20%, and total Ability. Edit attr.* ratings to recalculate the values in Excel. The skill column is the in-game Ability at export; on import the game recalculates it from attributes. Leave formulas in place when saving as CSV UTF-8.</p>'+
  (p?'<div class="notice" style="margin-top:16px"><strong>Import preview: '+esc(p.filename)+'</strong><p>'+details+'</p>'+options+
  '<div class="row" style="margin-top:12px"><button class="primary" id="crApply">Confirm import</button><button id="crCancel">Cancel</button></div></div>':'')+
  (crError?'<p class="notice" style="color:var(--bad);margin-top:12px">'+esc(crError)+'</p>':'')+
