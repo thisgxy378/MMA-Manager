@@ -1079,7 +1079,7 @@ function installStartingRoster(fighters){
  state.fighters=fighters.map((row,i)=>{
   const match=existing.find(f=>f.name.toLowerCase()===row.name.toLowerCase()&&f.gender===row.gender);
   const base=match||defaults;
-  return {...base,...row,id:i+1,realFighter:row.realFighter===undefined?true:row.realFighter,recordUnverified:row.recordUnverified??true,
+  return {...base,...row,id:i+1,realFighter:row.realFighter===undefined?Boolean(match?.realFighter):row.realFighter,recordUnverified:row.recordUnverified??true,
    rosterImportOrigin:'Imported',attributes:row.attributes||undefined,hiddenTendencies:row.hiddenTendencies||undefined,
    techniqueProfile:row.techniqueProfile||undefined,hiddenPersonalityFactors:row.hiddenPersonalityFactors||undefined,
    researchAttributeVersion:row.researchAttributeVersion||undefined,deepResearchAttributeVersion:row.deepResearchAttributeVersion||undefined,
@@ -1096,6 +1096,10 @@ function installStartingRoster(fighters){
    delete f.masterTechniquePatches;
   }
   syncFighterAbility(f);
+  if(f.promotion===state.player&&!state.contracts.some(c=>c.id===f.id)){
+   const purse=Math.max(8000,Math.round((Number(f.salary)||f.skill*2400)/4/1000)*1000);
+   state.contracts.push({id:f.id,show:purse,win:purse,signing:0,fights:4,weeks:104,start:now(),origin:'Imported starting roster'});
+  }
  });
 }
 function setup(){return `<div class="setup"><h1>MMA <span class="tag">Manager</span></h1><p class="sub">New Career · Choose your starting fighter database before selecting a promotion.</p>
@@ -1448,4 +1452,4 @@ for(const c of [...state.contracts]){if(c.fights<=0||now()-c.start>=c.weeks){let
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 render();
-</script><script src="social2.js?v=scheduled-coverage-2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=technique-profiles-1"></script><script src="roster-import.js?v=master-roster-2"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
+</script><script src="social2.js?v=scheduled-coverage-2"></script><script>if(state)render();</script><script src="incidents.js?v=world-incidents-1"></script><script src="narratives.js?v=organic-incidents-1"></script><script src="media.js?v=media-enquiries-2"></script><script src="events.js?v=technique-profiles-1"></script><script src="roster-import.js?v=master-roster-3"></script><script src="negotiations.js?v=offers-inbox-20261116"></script></body></html>
